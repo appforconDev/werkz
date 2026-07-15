@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "source": "docs/event-model.md §3.2 (approved 2026-07-16)",
+  "categories": [
+    {
+      "id": "file-deletion",
+      "label": "File deletion",
+      "commandPatterns": [
+        "\\brm\\b",
+        "\\brmdir\\b",
+        "\\bunlink\\b",
+        "\\bshred\\b",
+        "\\bfind\\b.*-delete\\b",
+        "\\bgit\\s+clean\\b",
+        "\\bmv\\b.*\\s+(/dev/null|/tmp)\\b"
+      ]
+    },
+    {
+      "id": "vcs-rewrite",
+      "label": "History/remote rewrite",
+      "commandPatterns": [
+        "\\bgit\\s+push\\b.*(\\s--force\\b|\\s--force-with-lease\\b|\\s--delete\\b|\\s-f\\b)",
+        "\\bgit\\s+reset\\s+--hard\\b",
+        "\\bgit\\s+rebase\\b",
+        "\\bgit\\s+branch\\s+-D\\b"
+      ]
+    },
+    {
+      "id": "database",
+      "label": "Database destruction",
+      "commandPatterns": [
+        "\\bdrop\\s+(table|database|schema|index)\\b",
+        "\\btruncate\\b(?!\\s+-)",
+        "\\bdelete\\s+from\\b(?!.*\\bwhere\\b)",
+        "\\bupdate\\s+\\S+\\s+set\\b(?!.*\\bwhere\\b)"
+      ]
+    },
+    {
+      "id": "deploy-publish",
+      "label": "Deploy / publish",
+      "commandPatterns": [
+        "\\bnpm\\s+publish\\b",
+        "\\bcargo\\s+publish\\b",
+        "\\bvercel\\b.*--prod\\b",
+        "\\bwrangler\\s+(deploy|publish)\\b",
+        "\\bflyctl\\s+deploy\\b",
+        "\\bkubectl\\s+(apply|delete)\\b",
+        "\\bterraform\\s+(apply|destroy)\\b"
+      ]
+    },
+    {
+      "id": "secrets",
+      "label": "Secrets access",
+      "commandPatterns": [
+        "\\.env(\\.|\\b)",
+        "\\bkeychain\\b",
+        "\\bsecurity\\s+find-generic-password\\b",
+        "\\bcredentials?\\b"
+      ],
+      "pathPatterns": [
+        "**/.env*",
+        "**/*_KEY*",
+        "**/credentials*",
+        "**/secrets*"
+      ]
+    },
+    {
+      "id": "system-ops",
+      "label": "Broad system ops",
+      "commandPatterns": [
+        "\\bchmod\\s+-R\\b",
+        "\\bchown\\s+-R\\b",
+        "\\bkill\\s+-9\\b",
+        "\\bpkill\\b",
+        "\\bcrontab\\b",
+        "\\blaunchctl\\b",
+        "\\bsystemctl\\b"
+      ]
+    },
+    {
+      "id": "pipe-to-shell",
+      "label": "Pipe-to-shell install",
+      "commandPatterns": [
+        "\\b(curl|wget)\\b[^|]*\\|\\s*(ba|z)?sh\\b"
+      ]
+    },
+    {
+      "id": "vcs-data-loss",
+      "label": "VCS data-loss without delete-words",
+      "commandPatterns": [
+        "\\bgit\\s+checkout\\s+--\\s",
+        "\\bgit\\s+checkout\\s+\\.(\\s|$)",
+        "\\bgit\\s+restore\\b(?!\\s+--staged\\b)",
+        "\\bgit\\s+stash\\s+(drop|clear)\\b"
+      ]
+    },
+    {
+      "id": "cloud-container",
+      "label": "Cloud/container destruction",
+      "commandPatterns": [
+        "\\bdocker\\s+system\\s+prune\\b",
+        "\\bdocker\\s+volume\\s+rm\\b",
+        "\\baws\\s+s3\\s+(rm|rb)\\b",
+        "\\bgcloud\\b.*\\bdelete\\b",
+        "\\bsupabase\\s+db\\s+reset\\b",
+        "\\bgh\\s+repo\\s+delete\\b",
+        "\\bflyctl\\s+apps\\s+destroy\\b"
+      ]
+    },
+    {
+      "id": "redirect-overwrite",
+      "label": "Redirection overwrite of files",
+      "commandPatterns": [
+        "(?<![=>\\-\\d&])>(?![>&=])\\s*[\\w./~-]",
+        "\\btruncate\\b",
+        "\\btee\\b(?!\\s+-a\\b)"
+      ]
+    }
+  ]
+}

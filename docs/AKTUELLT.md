@@ -2,7 +2,7 @@
 
 > Living document. CC updates this at the end of every work session (see CLAUDE.md). Newest entry on top under "Log". "Now" is the single source of truth for what to work on next.
 
-## Status: P0 — Concept & identity
+## Status: P0 complete → P1 — Daemon + event stream
 
 **Decided (locked):**
 - Name: **Werkz**, domain werkz.app (registering)
@@ -17,10 +17,11 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **event-model.md re-review** — v0.2 after Rickard's gate feedback; everything approved as amended EXCEPT §3.4 (adaptive hold strategy) which needs re-review. Gate before anything in daemon/ starts.
-2. **Repo scaffold** — monorepo per MASTERPLAN structure, CI stub, .env.example (FAL_KEY), README pointing at docs/.
+1. **P1 week-1 hold prototype** (per event-model.md CRITICAL ASSUMPTION box): validate hour-long synchronous `PermissionRequest` holds against a real CC session BEFORE any other daemon work. Test: CLI spinner UX, hook retry behavior, connection lifecycle. Outcome gates the whole remote-decision value prop — if unstable, stop and re-plan with Rickard.
+2. **P1 daemon bootstrap** — `npx werkz`: hooks installation, QR pairing, mDNS advertise (after #1 passes).
+3. **P1 event adapter** — CC hook payloads → WerkzEvent per event-model.md §2 taxonomy.
 
-**Done:** Task 1 concept art run — closed 2026-07-16, all gates approved. Canonical assets in `assets-pipeline/approved/` (style anchor + logo in `anchors/`, vector mark in `vector/`).
+**Done:** Task 1 (concept art, 2026-07-16) · Task 2 (event-model.md v0.2 fully approved, 2026-07-16) · Task 3 (repo scaffold, 2026-07-16). P0 exit criteria met.
 
 ## Blocked / waiting
 
@@ -37,6 +38,7 @@
 
 ## Log
 
+- **2026-07-16 (task 3, P0 exit)** — event-model v0.2 fully approved (task 2 closed). Monorepo scaffolded: daemon/ (Node 22+/TS/ESM, `npx werkz` bin, WerkzEvent types verbatim from event-model §1, data-driven destructive classifier with 39 passing tests, branded narration zone types with no cast path, server stubs), app/ (Flutter portrait-locked, Flame + Riverpod declared, analyze clean), backend/ (sql/ history convention, no-CLI rule documented), landing/ (Astro + Tailwind v4 placeholder), root README + CI (daemon typecheck + tests). No feature code — scaffold means scaffold. P0 exit criteria met; "Now" #1 is the hold prototype per the CRITICAL ASSUMPTION box.
 - **2026-07-16 (task 2 amend, v0.2)** — Gate feedback applied: adaptive hold strategy (hold-until-decided when phone connected + terminal quiet; 300s only at keyboard; never block unreachable), long-hold risk promoted to CRITICAL ASSUMPTION box gating all daemon work. 48h expiry clock now counts workshop-open hours only. Destructive list +3 categories (VCS data-loss, cloud/container destruction, redirection overwrites) — catch-all kept last. Octagon cost policy decided into §5 (hint always, user-initiated always, auto-suggest 2/day). Re-review pending on §3.4 only.
 - **2026-07-16 (task 2 draft)** — event-model.md v0.1 written after verifying current CC docs (hooks API now has 31 event types incl. PermissionRequest, PostToolUseFailure, SubagentStart — and http hook handlers, which make the daemon adapter clean: hooks POST straight to localhost). Taxonomy maps 20+ CC sources to internal events; destructive-op list proposed (8 categories); sanitizer designed as two type-separated zones — free narration can never reach share cards. Honest gap flagged: remote decisions ride a synchronously-held PermissionRequest hook, prototype first in P1. Gate: Rickard reviews before daemon/ starts.
 - **2026-07-16 (task 1 closed)** — Room gate approved. Empty rooms 02–05, advisor office (standard + idle) moved to `approved/`. New anchor rules: off-grammar bureaucratic English allowed sparingly in minor signage only; octagon benches populated by sprites at runtime. Open question added on room frame uniformity (P2 decision). Task 1 done — next: event-model.md.

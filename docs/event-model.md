@@ -1,6 +1,6 @@
 # Werkz Event Model
 
-> Status: v0.2, 2026-07-16 — reviewed by Rickard; approved as amended except §3.4 (pending re-review).
+> Status: v0.2, 2026-07-16 — fully approved by Rickard. Implementation target for daemon/ P1.
 > Bridge document between `gamedesign.md` (the what) and `daemon/` (the how). Written for the build agent.
 > CC hook facts verified against code.claude.com/docs/en/hooks and platform.claude.com/docs/en/agent-sdk on 2026-07-16 — do not trust these tables blindly after ~2026-Q4; re-verify.
 

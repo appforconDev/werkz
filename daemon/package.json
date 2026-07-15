@@ -1,0 +1,20 @@
+{
+  "name": "werkz",
+  "version": "0.0.1",
+  "description": "Werkz daemon — turns your coding agents' work into a workshop you run from your phone.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "werkz": "./src/cli.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test 'src/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0"
+  }
+}
