@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 122">
+  <!-- Knockout (white) variant of the WERKZ hero W, for dark surfaces.
+       Same geometry as werkz-w.svg. -->
+  <path fill="#FFFFFF" d="M0,0 L46,0 L88.8,77.8 L101,42 L123,42 L135.2,77.8 L178,0 L224,0 L156.9,122 L118.2,122 L112,104 L105.8,122 L67.1,122 Z"/>
+</svg>

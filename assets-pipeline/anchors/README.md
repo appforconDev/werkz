@@ -20,9 +20,16 @@ app-icon rendering.
 only — stamp/stencil/emboss/small-size executions — not the letterform source.
 Prompt for both sheets in `werkz-logo-v2.prompt.txt`.
 
-Open task: the final production logo must be manually vectorized from
-`werkz-logo-hero-letterform.png` — raster AI output is not acceptable for the
-app icon.
+**`../vector/werkz-w.svg` is the canonical vector mark** (pending Rickard's
+approval of `../vector/comparison.png`): hand-constructed geometric paths
+matching the hero letterform's proportions — box 224:122, center apex at 34%
+height, thick outer / thin inner strokes (46/32), sharp corners, flat-cut
+peaks and bottoms. `werkz-w-knockout.svg` is the white variant for dark
+surfaces. The raster letterform crops remain as reference only.
+
+App icon = the vector mark centered on a square steel-plate treatment
+(raster plate background is OK; the mark itself always renders from the
+vector, never from raster AI output).
 
 Rules:
 

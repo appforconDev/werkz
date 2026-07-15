@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 224 122">
+  <!-- WERKZ hero W. Geometry rules: wide grounded W (224:122), center apex at
+       34% height (distinctly lower than outer peaks), thick outer strokes /
+       thin inner strokes (46/32), sharp corners, flat-cut peaks and bottoms.
+       Proportions measured from anchors/werkz-logo-hero-letterform.png. -->
+  <path fill="#2E3134" d="M0,0 L46,0 L88.8,77.8 L101,42 L123,42 L135.2,77.8 L178,0 L224,0 L156.9,122 L118.2,122 L112,104 L105.8,122 L67.1,122 Z"/>
+</svg>
