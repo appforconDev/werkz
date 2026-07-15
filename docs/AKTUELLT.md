@@ -24,7 +24,8 @@
 ## Blocked / waiting
 
 - Domain registration (Rickard)
-- Fal key into `.env` (Rickard, local only)
+- Fal key into `.env` (Rickard, local only) — done 2026-07-15
+- Logo vectorization: final production logo must be manually vectorized from the chosen variant on `anchors/werkz-logo-v2.png` (raster AI output not acceptable for app icon)
 
 ## Parked (do not touch until phase says so)
 
@@ -32,6 +33,7 @@
 
 ## Log
 
+- **2026-07-15 (evening, 1a-fix)** — Anchor v1 approved by Rickard, with one correction: the W's center apex rose too high (reads as four bars small). Standalone logo sheet generated (3 candidates); winner has the low center vertex consistent across all 6 variations incl. stencil-cut and small-size row. `anchors/werkz-logo-v2.png` now supersedes the anchor-v1 W for all assets; anchor-v1 stays canonical for materials/palette only. Open task: manual vectorization of final logo (raster AI not acceptable for app icon). Logo rule added to shared prompt prefix.
 - **2026-07-15 (evening)** — Task 1a done: WERKZ style anchor v1 generated (gpt-image-2 via Fal, 3 candidates, tile-level text inspection). Winner has flawless typography: correct WERKZ branding throughout, all 10 palette hex codes exact, zero Lumon residue. Canonical anchor + prompt + governance README in `assets-pipeline/anchors/`. Asset pipeline (`generate.mjs`, manifest, room/overlay/sprite prompts) committed earlier today. Q.A. Division has stamped it; Rickard has not — style gate still open.
 - **2026-07-15 (later)** — Marketing phase P2.5 added: 1955-conglomerate brand play, X-first channel plan, waitlist gate ≥500 before beta.
 - **2026-07-15** — Project born from a midnight TikTok. GDD designed and approved through all 8 phases (game-mechanics-designer skill). Name set: Werkz. Payment model pivoted from IAP to web-only after anti-steering research. Masterplan, this doc, and CLAUDE.md created. Next: concept art.

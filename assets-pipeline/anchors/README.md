@@ -1,7 +1,18 @@
 # Style anchors — theme #1 (1955 industrial bureaucracy)
 
-**`werkz-style-anchor-v1.png` is the canonical style anchor for theme #1.**
-The exact prompt that produced it is in `werkz-style-anchor-v1.prompt.txt`.
+**`werkz-style-anchor-v1.png` is the canonical style anchor for theme #1** —
+for materials and palette ONLY (see logo note below). The exact prompt that
+produced it is in `werkz-style-anchor-v1.prompt.txt`.
+
+**`werkz-logo-v2.png` is the canonical WERKZ logomark** and supersedes the W
+shown in anchor-v1 for ALL future assets: the correct mark has its center
+vertex distinctly LOWER than the outer peaks (classic wide W silhouette);
+the anchor-v1 W (center apex too high, reads as four bars at small sizes) must
+not be reproduced. Prompt in `werkz-logo-v2.prompt.txt`.
+
+Open task: the final production logo must be manually vectorized from the
+chosen variant on the v2 sheet — raster AI output is not acceptable for the
+app icon.
 
 Rules:
 

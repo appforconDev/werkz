@@ -3,6 +3,7 @@
   "defaults": { "quality": "high", "output_format": "png", "num_images": 1 },
   "jobs": [
     { "id": "werkz-style-anchor-v1", "prompt": "anchors/werkz-style-anchor-v1.prompt.txt", "image_size": "square_hd", "anchor": false, "num_images": 3 },
+    { "id": "werkz-logo-v2", "prompt": "anchors/werkz-logo-v2.prompt.txt", "image_size": "square_hd", "anchor": false, "num_images": 3 },
     { "id": "01-style-sheet", "prompt": "anchors/01-style-sheet.txt", "image_size": "square_hd" },
     { "id": "02-room-workshop-floor", "prompt": "anchors/02-room-workshop-floor.txt", "image_size": "landscape_16_9" },
     { "id": "03-room-test-workshop", "prompt": "anchors/03-room-test-workshop.txt", "image_size": "landscape_16_9" },
