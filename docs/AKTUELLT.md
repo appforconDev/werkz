@@ -17,7 +17,7 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **event-model.md** — map CC hooks/SDK events → game objects (the bridge doc between GDD and code). Covers: event taxonomy, adapter schema (versioned), narration trigger classes, trust-affecting events, decision routing, octagon flow. Gate: Rickard reviews before anything in daemon/ starts.
+1. **event-model.md review** — v0.1 draft written (`docs/event-model.md`), pending Rickard's review. Gate before anything in daemon/ starts. Review focus: §3.2 destructive list (approve/amend), §3.4 hook-hold constraint, §6 open questions.
 2. **Repo scaffold** — monorepo per MASTERPLAN structure, CI stub, .env.example (FAL_KEY), README pointing at docs/.
 
 **Done:** Task 1 concept art run — closed 2026-07-16, all gates approved. Canonical assets in `assets-pipeline/approved/` (style anchor + logo in `anchors/`, vector mark in `vector/`).
@@ -37,6 +37,7 @@
 
 ## Log
 
+- **2026-07-16 (task 2 draft)** — event-model.md v0.1 written after verifying current CC docs (hooks API now has 31 event types incl. PermissionRequest, PostToolUseFailure, SubagentStart — and http hook handlers, which make the daemon adapter clean: hooks POST straight to localhost). Taxonomy maps 20+ CC sources to internal events; destructive-op list proposed (8 categories); sanitizer designed as two type-separated zones — free narration can never reach share cards. Honest gap flagged: remote decisions ride a synchronously-held PermissionRequest hook, prototype first in P1. Gate: Rickard reviews before daemon/ starts.
 - **2026-07-16 (task 1 closed)** — Room gate approved. Empty rooms 02–05, advisor office (standard + idle) moved to `approved/`. New anchor rules: off-grammar bureaucratic English allowed sparingly in minor signage only; octagon benches populated by sprites at runtime. Open question added on room frame uniformity (P2 decision). Task 1 done — next: event-model.md.
 - **2026-07-16 (1b-fix)** — Canon locked: robot workers (three personnel-file personas), human advisor as room fixture, rooms always unpopulated (sprites composite at runtime). Populated first-batch rooms parked as P2.5 marketing stills in `output/marketing/`. Rooms 02–05 regenerated empty + advisor idle variant (newspaper, coffee): 5/5, verified — no figures, walkable floor bands, all signage correctly spelled with proper W. The generator improvised good bureaucracy ("DOCUMENTS ARE EVIDENCE OF EFFORT", "WERKZ CODE OF ORDER"). Awaiting Rickard's room gate → task 1 closes.
 - **2026-07-15 (night)** — Vector gate APPROVED by Rickard: `vector/werkz-w.svg` is the canonical mark. Batch 1b–1d generated, 7/7: five rooms, decision overlay, worker sprites. Diff panel in the overlay verified abstract (no readable code strings — sanitizer rule holds even in concept art). Workers came out as riveted robots; advisor as human NPC. All in `output/` (ungitted) pending Rickard's pick.
