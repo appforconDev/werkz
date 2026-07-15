@@ -1,8 +1,22 @@
 # Werkz Event Model
 
-> Status: v0.1 draft, 2026-07-16 — awaiting Rickard's review (gate before any daemon/ work).
+> Status: v0.2, 2026-07-16 — reviewed by Rickard; approved as amended except §3.4 (pending re-review).
 > Bridge document between `gamedesign.md` (the what) and `daemon/` (the how). Written for the build agent.
 > CC hook facts verified against code.claude.com/docs/en/hooks and platform.claude.com/docs/en/agent-sdk on 2026-07-16 — do not trust these tables blindly after ~2026-Q4; re-verify.
+
+## ⚠ CRITICAL ASSUMPTION (validate in P1 week 1, before anything else in daemon/)
+
+**The entire remote-decision value prop rides on holding a `PermissionRequest`
+hook open for a LONG time** — minutes to hours — while the phone decides.
+Docs confirm configurable timeouts and allow/deny responses; they do NOT
+confirm that hour-long synchronous holds are stable (CLI spinner UX, hook
+retry behavior, connection lifecycle). The P1 week-1 prototype MUST test
+hour-long holds against a real CC session before any other daemon work
+proceeds. If long holds prove unstable, the fallback is
+**advisory-after-the-fact** (decision recorded, applied to trust, but CC's
+terminal dialog resolved the actual permission) — that fallback is a
+**degraded mode**, not the design. If we find ourselves building the product
+on the fallback, stop and re-plan with Rickard.
 
 ## 0. Architecture position
 
@@ -117,7 +131,10 @@ A `PermissionRequest` is destructive if tool_input matches any of:
 5. Secrets: reads or writes of `.env*`, `*_KEY*`, keychain/credential stores; `Write`/`Edit` targeting those globs
 6. Broad system ops: `chmod -R`, `chown -R`, `kill -9` on non-child pids, `crontab`, `launchctl`, `systemctl`
 7. Pipe-to-shell installs: `curl … | sh`, `wget … | bash`
-8. Anything the classifier cannot parse (unknown = dangerous, opt-down not opt-up)
+8. VCS data-loss without delete-words: `git checkout -- .`, `git restore` (worktree-discarding forms), `git stash drop`, `git stash clear`
+9. Cloud/container destruction: `docker system prune`, `docker volume rm`, `aws s3 rm/rb`, `gcloud … delete`, `supabase db reset`, `gh repo delete`, equivalent CLIs
+10. Redirection overwrites of tracked files: `> file`, `truncate`, `tee` without `-a` onto files under VCS
+11. Anything the classifier cannot parse (unknown = dangerous, opt-down not opt-up)
 
 The list lives in daemon as versioned data with tests. False positive = a decision the user gets to make anyway (annoying, safe). False negative = incident.
 
@@ -138,11 +155,21 @@ created ─► notified ─► decided(approved|denied) ─► applied ─► ou
 | approved work reverted <24h | `decision.reverted` | −5 | — |
 | auto-approved by trust | `decision.autoapproved` | 0 (no farming trust from auto) | not required for clean day |
 
+**Expiry clock rule:** the 48h counts **workshop-open hours only** — the clock pauses during scheduled quiet ("workshop closed") and maintenance mode. Absence and boundaries are never punished (GDD §2.6 + §8.2 wellbeing): a decision created Friday evening before a weekend off has its full 48h left on Monday.
+
 Notification touchpoint #1 (decision pending) fires on `decision.requested` only — one push per decision, no reminders (re-engagement ban).
 
-### 3.4 Hard constraint from CC (flagged, not hidden)
+### 3.4 Hold strategy (adaptive — pending re-review)
 
-The `PermissionRequest` hook handler **blocks the CC session synchronously** until it responds (configurable timeout). Remote decisions therefore work like this: daemon holds the hook open up to `decisionHoldSeconds` (config, default 300); if the phone answers in time, daemon replies allow/deny; on timeout, daemon replies `ask` and CC's own terminal dialog takes over — the game decision then arrives too late and is recorded as `decision.superseded` (no trust effect). Whether a very long hold degrades the CLI UX is Open Question #1.
+The `PermissionRequest` hook handler **blocks the CC session synchronously** until it responds. The daemon holds adaptively based on where the user plausibly is:
+
+| Condition | Hold behavior |
+|---|---|
+| Phone paired/connected AND no terminal activity detected | **Hold until decided — no fixed timeout.** The user is away; the phone IS the decision surface (see CRITICAL ASSUMPTION box) |
+| Terminal activity suggests user at keyboard (interactive CC events — e.g. `UserPromptSubmit` — within the activity window, config `terminalActivityWindowMinutes`, default 5) | Hold max `decisionHoldSeconds` (default 300), then reply `ask` — CC's own terminal dialog takes over |
+| Phone not connected / unreachable | Reply `ask` immediately — never block a session that nothing can answer |
+
+When the terminal dialog supersedes a pending game decision, the daemon records `decision.superseded` (no trust effect). Advisory-after-the-fact recording exists only as the degraded mode described in the CRITICAL ASSUMPTION box.
 
 ## 4. Narration trigger classes
 
@@ -199,15 +226,17 @@ Orchestration (daemon, Claude Agent SDK — separate from the user's interactive
 
 Upset flag feeds golden-moment weighting (§4.1). Notification touchpoint #2 fires on `octagon.verdict.requested` and on `dispute.resolved` when user-watched.
 
+**Cost policy (decided 2026-07-16):** a dispute runs 2 proposals + 2 critiques ≈ 3–5× the underlying task's cost, on the user's key/subscription. Rules: (a) a cost hint with the multiplier estimate is ALWAYS shown before a dispute starts; (b) user-initiated disputes are always allowed — their money, their call; (c) auto-suggest is capped at 2 suggestions/day (config `octagonAutoSuggestPerDay`).
+
 ## 6. Open questions (honest gaps — do not invent around these)
 
-1. **Long-held PermissionRequest hooks.** Docs confirm the hook can respond allow/deny and timeouts are configurable, but holding a synchronous hook for minutes while a phone decides is untested territory (CLI spinner UX, retry behavior on hook timeout). Prototype in P1 week 1; fallback design = decisions become advisory-after-the-fact when hold expires.
-2. **Diff availability at PermissionRequest time.** For `Edit/Write` the pending diff is derivable from `tool_input`, but for `Bash` there is no diff — the overlay's "diff core" for command decisions is the command text itself. Confirm rendering rules per class.
-3. **Test detection fidelity.** Test runs surface as `Bash` PostToolUse with exit info in `tool_output` — mapping pass/fail requires output parsing per runner. The classifier list (§2.2) needs beta telemetry; unknown runners degrade to `task.completed` (acceptable).
-4. **Octagon on the user's dime.** Two parallel SDK runs + critiques ≈ 3–5× cost of the underlying task, on the user's key/subscription. Needs explicit per-dispute cost hint in UI, and possibly a config cap. Not a docs gap, a product decision.
-5. **`Notification` matcher inventory.** Docs list `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`, "etc." — enumerate the full set empirically during P1; only `idle_prompt` is load-bearing (worker.waiting).
-6. **Multi-session / multi-project.** One daemon, several concurrent CC sessions in different repos: sessionId mapping is designed for it, but room/worker presentation for project #2 is a paid-tier P4 concern — v1 renders the active project only.
-7. **Hermes/OpenClaw adapters (v2, parked).** The taxonomy avoids CC-specific semantics, but subagent personas (§1.1) assume an `agent_type` string exists in other providers. Revisit at adapter #2.
+*(Long-hold stability was promoted to the CRITICAL ASSUMPTION box at the top of this doc. Octagon cost policy was decided and moved into §5.)*
+
+1. **Diff availability at PermissionRequest time.** For `Edit/Write` the pending diff is derivable from `tool_input`, but for `Bash` there is no diff — the overlay's "diff core" for command decisions is the command text itself. Confirm rendering rules per class.
+2. **Test detection fidelity.** Test runs surface as `Bash` PostToolUse with exit info in `tool_output` — mapping pass/fail requires output parsing per runner. The classifier list (§2.2) needs beta telemetry; unknown runners degrade to `task.completed` (acceptable).
+3. **`Notification` matcher inventory.** Docs list `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`, "etc." — enumerate the full set empirically during P1; only `idle_prompt` is load-bearing (worker.waiting).
+4. **Multi-session / multi-project.** One daemon, several concurrent CC sessions in different repos: sessionId mapping is designed for it, but room/worker presentation for project #2 is a paid-tier P4 concern — v1 renders the active project only.
+5. **Hermes/OpenClaw adapters (v2, parked).** The taxonomy avoids CC-specific semantics, but subagent personas (§1.1) assume an `agent_type` string exists in other providers. Revisit at adapter #2.
 
 ## Sources
 
