@@ -1,0 +1,14 @@
+{
+  "model": "openai/gpt-image-2",
+  "defaults": { "quality": "high", "output_format": "png", "num_images": 1 },
+  "jobs": [
+    { "id": "01-style-sheet", "prompt": "anchors/01-style-sheet.txt", "image_size": "square_hd" },
+    { "id": "02-room-workshop-floor", "prompt": "anchors/02-room-workshop-floor.txt", "image_size": "landscape_16_9" },
+    { "id": "03-room-test-workshop", "prompt": "anchors/03-room-test-workshop.txt", "image_size": "landscape_16_9" },
+    { "id": "04-room-archive", "prompt": "anchors/04-room-archive.txt", "image_size": "landscape_16_9" },
+    { "id": "05-room-octagon", "prompt": "anchors/05-room-octagon.txt", "image_size": "landscape_16_9" },
+    { "id": "06-room-advisors-office", "prompt": "anchors/06-room-advisors-office.txt", "image_size": "landscape_16_9" },
+    { "id": "07-decision-overlay", "prompt": "anchors/07-decision-overlay.txt", "image_size": "portrait_16_9" },
+    { "id": "08-worker-sprites", "prompt": "anchors/08-worker-sprites.txt", "image_size": "landscape_4_3" }
+  ]
+}
