@@ -17,7 +17,7 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **Concept art run** — use gpt-image-2 skill to generate: (a) style anchor sheet for the 1955-bureaucracy theme, (b) 5 core rooms (workshop floor, test workshop, archive, octagon, advisor's office), (c) decision-overlay mockup with stamp, (d) 3 worker sprite references. Gate: Rickard approves style before any Flutter work.
+1. **Concept art run** — generate via gpt-image-2 (Fal): (a) ~~style anchor sheet for the 1955-bureaucracy theme~~ **done** → `assets-pipeline/anchors/werkz-style-anchor-v1.png`, awaiting Rickard's style approval; (b) 5 core rooms (workshop floor, test workshop, archive, octagon, advisor's office) — prompts ready in `assets-pipeline/anchors/`, generation pending; (c) decision-overlay mockup with stamp — prompt ready; (d) 3 worker sprite references — prompt ready. Gate: Rickard approves style before any Flutter work.
 2. **event-model.md** — map CC hooks/SDK events → game objects (the bridge doc between GDD and code). Covers: event taxonomy, adapter schema (versioned), narration trigger classes, trust-affecting events.
 3. **Repo scaffold** — monorepo per MASTERPLAN structure, CI stub, .env.example (FAL_KEY), README pointing at docs/.
 
@@ -32,5 +32,6 @@
 
 ## Log
 
+- **2026-07-15 (evening)** — Task 1a done: WERKZ style anchor v1 generated (gpt-image-2 via Fal, 3 candidates, tile-level text inspection). Winner has flawless typography: correct WERKZ branding throughout, all 10 palette hex codes exact, zero Lumon residue. Canonical anchor + prompt + governance README in `assets-pipeline/anchors/`. Asset pipeline (`generate.mjs`, manifest, room/overlay/sprite prompts) committed earlier today. Q.A. Division has stamped it; Rickard has not — style gate still open.
 - **2026-07-15 (later)** — Marketing phase P2.5 added: 1955-conglomerate brand play, X-first channel plan, waitlist gate ≥500 before beta.
 - **2026-07-15** — Project born from a midnight TikTok. GDD designed and approved through all 8 phases (game-mechanics-designer skill). Name set: Werkz. Payment model pivoted from IAP to web-only after anti-steering research. Masterplan, this doc, and CLAUDE.md created. Next: concept art.

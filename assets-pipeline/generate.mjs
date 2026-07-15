@@ -35,8 +35,9 @@ async function falJson(url, key, init = {}) {
 }
 
 async function runJob(job, { model, key, anchor, defaults, qualityOverride }) {
+  const promptText = (await readFile(path.join(ROOT, job.prompt), 'utf8')).trim();
   const body = {
-    prompt: anchor + '\n\n' + (await readFile(path.join(ROOT, job.prompt), 'utf8')).trim(),
+    prompt: job.anchor === false ? promptText : anchor + '\n\n' + promptText,
     image_size: job.image_size,
     quality: qualityOverride ?? job.quality ?? defaults.quality,
     output_format: job.output_format ?? defaults.output_format,
