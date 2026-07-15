@@ -62,6 +62,11 @@ Rules:
   room art, not a sprite. (Standard + idle newspaper variant.)
 - Populated room renders from the first 1b batch are P2.5 marketing stills,
   parked in `../output/marketing/` — not game assets.
+- **Off-grammar bureaucratic English** ("INFORMATION IS ASSET") is allowed
+  SPARINGLY as easter eggs in minor signage — never in headlines. It should
+  sound like robot bureaucracy, not like a typo.
+- **Octagon audience benches are populated by worker SPRITES at runtime**
+  (your actual workers watching the match) — never painted-in.
 
 Other files: `NN-*.txt` are the P0 concept-art run prompts (rooms, decision
 overlay, worker sprites), driven by `../manifest.json` via `../generate.mjs`.
