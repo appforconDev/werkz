@@ -47,5 +47,22 @@ Rules:
   marketing material, or public posts of any kind.
 - The neon-hacker look is forbidden in theme #1 (future paid theme).
 
+## Canon rules (Rickard, 2026-07-15)
+
+- **Rooms are ALWAYS generated unpopulated.** Workers exist only as the
+  sprite layer composited at runtime — never painted into room art. Room
+  prompts must demand clear walkable floor space in the foreground/middle,
+  furniture and signage along walls and background.
+- **Workers are ROBOTS.** The three personnel-file personas (WX-7A19
+  Generalist, WX-3C57 Inspector, WX-9B72 Specialist) in
+  `../approved/08-worker-sprites.png` are the sprite foundation. No painted
+  humans as workers, ever.
+- **The Advisor is HUMAN** — the only human in the building: the smug senior
+  consultant in the Advisor's Office. He is an NPC fixture baked into the
+  room art, not a sprite. (Standard + idle newspaper variant.)
+- Populated room renders from the first 1b batch are P2.5 marketing stills,
+  parked in `../output/marketing/` — not game assets.
+
 Other files: `NN-*.txt` are the P0 concept-art run prompts (rooms, decision
 overlay, worker sprites), driven by `../manifest.json` via `../generate.mjs`.
+Approved canonical concept art lives in `../approved/`.

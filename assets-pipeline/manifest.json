@@ -10,6 +10,7 @@
     { "id": "04-room-archive", "prompt": "anchors/04-room-archive.txt", "image_size": "landscape_16_9" },
     { "id": "05-room-octagon", "prompt": "anchors/05-room-octagon.txt", "image_size": "landscape_16_9" },
     { "id": "06-room-advisors-office", "prompt": "anchors/06-room-advisors-office.txt", "image_size": "landscape_16_9" },
+    { "id": "06b-room-advisors-office-idle", "prompt": "anchors/06b-room-advisors-office-idle.txt", "image_size": "landscape_16_9" },
     { "id": "07-decision-overlay", "prompt": "anchors/07-decision-overlay.txt", "image_size": "portrait_16_9" },
     { "id": "08-worker-sprites", "prompt": "anchors/08-worker-sprites.txt", "image_size": "landscape_4_3" }
   ]
