@@ -17,7 +17,7 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **Concept art run** — (a) style anchor **done + approved** (`anchors/werkz-style-anchor-v1.png`, logo locked, vector approved); (b) 5 core rooms, (c) decision-overlay mockup, (d) 3 worker sprites — **all generated** → `assets-pipeline/output/02–08*.png`, awaiting Rickard's review. Gate: Rickard approves before any Flutter work.
+1. **Concept art run** — (a) style anchor **approved**; (c) overlay + (d) sprites **approved** → `assets-pipeline/approved/`; (b) rooms regenerated UNPOPULATED per canon (02–05 empty + 06b advisor idle variant, all verified: zero figures, walkable floor band, WERKZ signage correct) → `output/`, awaiting Rickard's final room gate. On approval task 1 closes.
 2. **event-model.md** — map CC hooks/SDK events → game objects (the bridge doc between GDD and code). Covers: event taxonomy, adapter schema (versioned), narration trigger classes, trust-affecting events.
 3. **Repo scaffold** — monorepo per MASTERPLAN structure, CI stub, .env.example (FAL_KEY), README pointing at docs/.
 
@@ -32,6 +32,7 @@
 
 ## Log
 
+- **2026-07-16 (1b-fix)** — Canon locked: robot workers (three personnel-file personas), human advisor as room fixture, rooms always unpopulated (sprites composite at runtime). Populated first-batch rooms parked as P2.5 marketing stills in `output/marketing/`. Rooms 02–05 regenerated empty + advisor idle variant (newspaper, coffee): 5/5, verified — no figures, walkable floor bands, all signage correctly spelled with proper W. The generator improvised good bureaucracy ("DOCUMENTS ARE EVIDENCE OF EFFORT", "WERKZ CODE OF ORDER"). Awaiting Rickard's room gate → task 1 closes.
 - **2026-07-15 (night)** — Vector gate APPROVED by Rickard: `vector/werkz-w.svg` is the canonical mark. Batch 1b–1d generated, 7/7: five rooms, decision overlay, worker sprites. Diff panel in the overlay verified abstract (no readable code strings — sanitizer rule holds even in concept art). Workers came out as riveted robots; advisor as human NPC. All in `output/` (ungitted) pending Rickard's pick.
 - **2026-07-15 (night, 1a-vector)** — Hero W vectorized by geometric construction, not autotracing: edge-map measurement of the letterform crop (bbox 224:122, apex at 34% height, notch depth ~64%, dual-weight strokes 46/32), then a hand-built 13-point path. The AI raster turned out asymmetric (photo perspective + generative wobble); rationalized to a clean symmetric mark. `vector/werkz-w.svg` + knockout + 1024/48px renders + `comparison.png`. Gate: Rickard approves comparison.png before the SVG ships anywhere.
 - **2026-07-15 (evening, 1a-final)** — Hero mark locked by Rickard: variant 05 "Embossed Metal Plate" from the candidate-3 sheet (variants are picked, not sheets). Plate cropped to `anchors/werkz-logo-hero.png`, letterform isolated to `werkz-logo-hero-letterform.png` (vectorization source). Embossed plate designated as app-icon rendering; candidate-1 sheet demoted to treatment reference. Shared prompt prefix now points at the hero letterform.
