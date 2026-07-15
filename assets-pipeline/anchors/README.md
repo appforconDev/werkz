@@ -20,8 +20,8 @@ app-icon rendering.
 only — stamp/stencil/emboss/small-size executions — not the letterform source.
 Prompt for both sheets in `werkz-logo-v2.prompt.txt`.
 
-**`../vector/werkz-w.svg` is the canonical vector mark** (pending Rickard's
-approval of `../vector/comparison.png`): hand-constructed geometric paths
+**`../vector/werkz-w.svg` is the canonical vector mark** (approved by Rickard
+2026-07-15 via `../vector/comparison.png`): hand-constructed geometric paths
 matching the hero letterform's proportions — box 224:122, center apex at 34%
 height, thick outer / thin inner strokes (46/32), sharp corners, flat-cut
 peaks and bottoms. `werkz-w-knockout.svg` is the white variant for dark

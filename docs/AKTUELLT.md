@@ -25,7 +25,6 @@
 
 - Domain registration (Rickard)
 - Fal key into `.env` (Rickard, local only) — done 2026-07-15
-- Logo vector gate: Rickard approves `assets-pipeline/vector/comparison.png` before `vector/werkz-w.svg` is used anywhere
 
 ## Parked (do not touch until phase says so)
 
@@ -33,6 +32,7 @@
 
 ## Log
 
+- **2026-07-15 (night)** — Vector gate APPROVED by Rickard: `vector/werkz-w.svg` is the canonical mark. Batch 1b–1d (5 rooms, decision overlay, worker sprites) generating.
 - **2026-07-15 (night, 1a-vector)** — Hero W vectorized by geometric construction, not autotracing: edge-map measurement of the letterform crop (bbox 224:122, apex at 34% height, notch depth ~64%, dual-weight strokes 46/32), then a hand-built 13-point path. The AI raster turned out asymmetric (photo perspective + generative wobble); rationalized to a clean symmetric mark. `vector/werkz-w.svg` + knockout + 1024/48px renders + `comparison.png`. Gate: Rickard approves comparison.png before the SVG ships anywhere.
 - **2026-07-15 (evening, 1a-final)** — Hero mark locked by Rickard: variant 05 "Embossed Metal Plate" from the candidate-3 sheet (variants are picked, not sheets). Plate cropped to `anchors/werkz-logo-hero.png`, letterform isolated to `werkz-logo-hero-letterform.png` (vectorization source). Embossed plate designated as app-icon rendering; candidate-1 sheet demoted to treatment reference. Shared prompt prefix now points at the hero letterform.
 - **2026-07-15 (evening, 1a-fix)** — Anchor v1 approved by Rickard, with one correction: the W's center apex rose too high (reads as four bars small). Standalone logo sheet generated (3 candidates); winner has the low center vertex consistent across all 6 variations incl. stencil-cut and small-size row. `anchors/werkz-logo-v2.png` now supersedes the anchor-v1 W for all assets; anchor-v1 stays canonical for materials/palette only. Open task: manual vectorization of final logo (raster AI not acceptable for app icon). Logo rule added to shared prompt prefix.
