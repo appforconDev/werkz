@@ -3,6 +3,7 @@
 // endpoints require the session token afterwards.
 
 import { randomBytes } from 'node:crypto';
+import { loadJson, saveJson } from '../state/store.ts';
 
 export interface PairingPayload {
   v: 1;
@@ -15,9 +16,19 @@ export class PairingManager {
   #pairingToken: string;
   #pairingUsed = false;
   #sessions = new Set<string>();
+  #persistPath: string | null;
 
-  constructor(pairingToken: string = randomBytes(16).toString('hex')) {
+  constructor(pairingToken: string = randomBytes(16).toString('hex'), persistPath: string | null = null) {
     this.#pairingToken = pairingToken;
+    this.#persistPath = persistPath;
+    if (persistPath) {
+      // Session tokens survive a daemon restart (task 7 §4).
+      for (const s of loadJson<string[]>(persistPath, [])) this.#sessions.add(s);
+    }
+  }
+
+  #save(): void {
+    if (this.#persistPath) saveJson(this.#persistPath, [...this.#sessions]);
   }
 
   get pairingToken(): string {
@@ -34,6 +45,7 @@ export class PairingManager {
     this.#pairingUsed = true;
     const session = randomBytes(24).toString('hex');
     this.#sessions.add(session);
+    this.#save();
     return session;
   }
 

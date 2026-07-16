@@ -18,6 +18,7 @@ import {
 } from '../adapter/cc/index.ts';
 import { deriveProjectIdentity } from '../adapter/cc/project.ts';
 import { decisionKey, uuidv7 } from '../util/id.ts';
+import { loadJson, saveJson } from '../state/store.ts';
 
 export interface HookResponse {
   hookSpecificOutput: {
@@ -67,12 +68,46 @@ export class DecisionService {
   #lastActivity = new Map<string, number>(); // internal sessionId → ms of last interactive signal
   // Game-safe summaries of open decisions, for the phone to GET /pending.
   #pendingSummaries = new Map<string, PendingSummary>();
+  #pendingStatePath: string | null;
 
-  constructor(config: DaemonConfig, bus: EventBus, trust = new TrustStore()) {
+  constructor(config: DaemonConfig, bus: EventBus, trust = new TrustStore(), pendingStatePath: string | null = null) {
     this.#config = config;
     this.#bus = bus;
     this.#trust = trust;
     this.#dedup = new DedupStore(config.decisionDedupWindowSeconds);
+    this.#pendingStatePath = pendingStatePath;
+  }
+
+  #persistPending(): void {
+    if (this.#pendingStatePath) saveJson(this.#pendingStatePath, [...this.#pendingSummaries.values()]);
+  }
+
+  /**
+   * Recover after a restart (task 7 §4). Any decision that was open when the
+   * daemon died belonged to a CC hook whose connection is now dead (the CLI
+   * fell back the moment we dropped) — it can never be answered. So we emit
+   * `decision.superseded` for each and clear: expired cleanly, never silently
+   * lost. Returns the count recovered. Call once at startup, after subscribers
+   * are attached.
+   */
+  recoverPending(): number {
+    if (!this.#pendingStatePath) return 0;
+    const leftover = loadJson<PendingSummary[]>(this.#pendingStatePath, []);
+    for (const s of leftover) {
+      this.#bus.emit(
+        buildEvent({
+          sessionId: 'recovered',
+          projectId: 'recovered',
+          workerId: null,
+          eventType: 'decision.superseded',
+          severity: 'info',
+          payload: { decisionId: s.decisionId, decisionClass: s.decisionClass, reason: 'daemon-restart' },
+        }),
+      );
+    }
+    this.#pendingSummaries.clear();
+    this.#persistPending();
+    return leftover.length;
   }
 
   get pendingCount(): number {
@@ -173,10 +208,12 @@ export class DecisionService {
       ...(cls.diffLines !== undefined ? { diffLines: cls.diffLines } : {}),
       openedAt: new Date(now).toISOString(),
     });
+    this.#persistPending();
     const ceiling = this.#holdCeilingSeconds(ctx.sessionId, now);
     const handle = this.#pending.open(decisionId, key, ceiling, now);
     const outcome = await handle.promise;
     this.#pendingSummaries.delete(decisionId);
+    this.#persistPending();
 
     if (outcome === 'superseded') {
       this.#bus.emit(
