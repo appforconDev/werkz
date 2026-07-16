@@ -17,13 +17,13 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **Adapter slice review** — event-model v0.3 + first real daemon slice built (PreToolUse routing → hold → events, 54 tests, live-session demo evidence in `daemon/experiments/adapter-slice-demo.md`). Gate: Rickard reviews the demo evidence before more daemon work.
-2. **P1 daemon bootstrap** — `npx werkz`: hooks installation (inject the PreToolUse http hook at pairing), QR pairing, mDNS advertise.
-3. **P1 LAN protocol** — WebSocket event stream to the app + release channel (replace the local `/release` stand-in with the real phone).
+1. **Bootstrap review** — `npx werkz` bootstrap built: startup + QR pairing + hook injection (merge/idempotent/uninstall) + git-based projectId + auth + fake-phone. 68 tests, e2e demo in `daemon/experiments/bootstrap-demo.md`. Gate: Rickard reviews demo evidence.
+2. **P1 LAN protocol** — real WebSocket event stream + release channel to the app (replace the fake-phone stand-in and the local `/release` with a paired socket).
+3. **P1 narration v0** — classification + dry-log text (no LLM yet), then BYOK Haiku narration with 80/18/2 weighting (GDD §3, event-model §4).
 
 **P1 exit criteria (hardware, owner Rickard, personal dogfooding):** (g1) full multi-hour wall-clock hold released to execution; (g2) laptop sleep/wake across an open hold. Relay does not ship until both green.
 
-**Done:** Task 1 (concept art) · Task 2 (event-model v0.2) · Task 3 (repo scaffold) · Task 4 (hold prototype — VIABLE) · Task 5 (event-model v0.3 + adapter slice). All 2026-07-16.
+**Done:** Task 1 (concept art) · Task 2 (event-model v0.2) · Task 3 (repo scaffold) · Task 4 (hold prototype — VIABLE) · Task 5 (event-model v0.3 + adapter slice) · Task 6 (daemon bootstrap). All 2026-07-16.
 
 ## Blocked / waiting
 
@@ -37,9 +37,11 @@
 ## Parked (do not touch until phase says so)
 
 - Octagon implementation (P4), themes beyond #1 (P4), Hermes/OpenClaw adapters (v2), human PvP (v2), live spectatorship (v2)
+- **Multi-workshop = paid boundary (P4):** projectId is repo-level (git identity), so each repo is one workshop. Free tier renders ONE active workshop and can switch between them; running multiple workshops at once is the paid feature (GDD §6). Free tier is always unlimited *within* one workshop (any number of workers/sessions in that repo).
 
 ## Log
 
+- **2026-07-16 (task 6, daemon bootstrap)** — `npx werkz` "first 60 seconds", daemon side: startup + terminal QR (host/port/one-time token) + friendly 1955 status line; hook injection into project `.claude/settings.json` that MERGES (preserves user hooks), is idempotent, and `npx werkz uninstall` removes exactly ours — verified byte-identical restore. projectId now derives from git identity (origin remote normalized, else repo-root path hash): worktrees/branches/clones = same workshop, multiple sessions = multiple workers, always free; multi-repo = paid boundary (event-model §1, P4 note). Pairing/auth: one-time QR token → POST /pair → session token; decision/state endpoints require it; /dev/* only behind WERKZ_DEV=1. mDNS advertise (_werkz._tcp) best-effort. scripts/fake-phone.mjs stands in for Flutter. 68 tests. E2E demo (fresh repo → pair → held destructive decision denied through paired channel → clean uninstall) in `daemon/experiments/bootstrap-demo.md`.
 - **2026-07-16 (task 5, event-model v0.3 + adapter slice)** — Amendment folded in: decision hook is `PreToolUse` (PermissionRequest demoted — never fires headless), hold ceiling fixed at open (§3.4), new §3.5 latency budget (<50 ms non-decision path, release-blocker tier) and §3.6 dedup rule. CRITICAL ASSUMPTION box → RESOLVED with two hardware gaps as P1 exit criteria. Then built the first real daemon slice under `daemon/src`: config, event bus (JSONL), classifier→router (classes + trust thresholds), dedup store, pending-hold manager, trust store, CC adapter (PreToolUse → WerkzEvent, game-safe payloads), http server (`/pretooluse`, `/release`, `/dev/trust`), runnable CLI. 54 tests pass incl. p99<50 ms latency and retry-after-deny dedup. Demo evidence: real CC 2.1.187 sessions — read auto-allowed, destructive `echo > tracked` HELD → denied → CC blocked (file unchanged), routine auto-allow logged at 2.47 ms. Slice does NOT do LAN/narration/trust-lifecycle yet.
 - **2026-07-16 (task 4, hold prototype)** — CRITICAL ASSUMPTION tested against real CC 2.1.187. VERDICT: viable with constraints. Held an http permission hook **32 min continuous → released allow → tool actually executed**; timeout honored far past the 600 s default (7200 set, 20+ min observed live). Deny blocks; timeout-overrun and server-kill both degrade gracefully (session always survived). Big correction: `PermissionRequest` does NOT fire in headless `claude -p` (4 runs, never reached the server) — build on `PreToolUse` instead (fires both modes, gates execution, same hold plumbing). §3.4 "no fixed timeout" isn't literally possible: ceiling is set when the hook opens. Also found: model retries a denied tool → hook re-fires → daemon must dedupe. Results doc written; §3.4 amendment pending Rickard. Untested-needs-hardware: full multi-hour wall-clock + sleep/wake.
 - **2026-07-16 (task 3, P0 exit)** — event-model v0.2 fully approved (task 2 closed). Monorepo scaffolded: daemon/ (Node 22+/TS/ESM, `npx werkz` bin, WerkzEvent types verbatim from event-model §1, data-driven destructive classifier with 39 passing tests, branded narration zone types with no cast path, server stubs), app/ (Flutter portrait-locked, Flame + Riverpod declared, analyze clean), backend/ (sql/ history convention, no-CLI rule documented), landing/ (Astro + Tailwind v4 placeholder), root README + CI (daemon typecheck + tests). No feature code — scaffold means scaffold. P0 exit criteria met; "Now" #1 is the hold prototype per the CRITICAL ASSUMPTION box.

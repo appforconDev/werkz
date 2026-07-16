@@ -62,6 +62,17 @@ interface WerkzEvent {
 
 Versioning rules: `schemaVersion` is on the envelope, additive fields do not bump it, renames/removals do. The daemon persists events as emitted; the app must tolerate unknown `eventType` values (render as generic activity).
 
+**projectId derivation (decided 2026-07-16, Rickard-approved):** `projectId`
+is a hash of **git identity** — the `origin` remote URL (normalized so ssh /
+https / `.git` forms collapse), or the repo-root path hash when there is no
+remote. Consequences: worktrees, branches, and clones of the same repo map to
+the **same workshop**; multiple concurrent CC sessions in one repo are
+multiple **workers** in one building — always free. The raw URL/path never
+leaves the daemon (only the hash is emitted). Derivation is computed once per
+CC session and cached — never on the per-call latency path (§3.5). Multi-repo
+= multi-**workshop** is the paid boundary (GDD §6); free tier renders one
+active workshop and can switch.
+
 ### 1.1 Worker mapping
 
 | CC concept | workerId rule |

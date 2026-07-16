@@ -12,10 +12,11 @@ import { PendingDecisions } from './pending.ts';
 import { TrustStore } from './trust.ts';
 import {
   type CcHookPayload,
-  projectIdFromCwd,
   preToolUseEvent,
   buildEvent,
+  roomForTool,
 } from '../adapter/cc/index.ts';
+import { deriveProjectIdentity } from '../adapter/cc/project.ts';
 import { decisionKey, uuidv7 } from '../util/id.ts';
 
 export interface HookResponse {
@@ -34,6 +35,17 @@ export interface HandleResult {
   deduped?: boolean;
 }
 
+// Game-safe view of a pending decision (no raw command/content — §4.3).
+export interface PendingSummary {
+  decisionId: string;
+  decisionClass: string;
+  room: string;
+  toolCategory: string;
+  destructiveCategory?: string;
+  diffLines?: number;
+  openedAt: string;
+}
+
 function reply(decision: 'allow' | 'deny' | 'ask', reason: string): HookResponse {
   return {
     hookSpecificOutput: {
@@ -50,9 +62,11 @@ export class DecisionService {
   #dedup: DedupStore;
   #pending = new PendingDecisions();
   #trust: TrustStore;
-  // CC session_id → internal { sessionId, workerId }
-  #sessions = new Map<string, { sessionId: string; workerId: string }>();
+  // CC session_id → internal { sessionId, workerId, projectId (cached) }
+  #sessions = new Map<string, { sessionId: string; workerId: string; projectId: string }>();
   #lastActivity = new Map<string, number>(); // internal sessionId → ms of last interactive signal
+  // Game-safe summaries of open decisions, for the phone to GET /pending.
+  #pendingSummaries = new Map<string, PendingSummary>();
 
   constructor(config: DaemonConfig, bus: EventBus, trust = new TrustStore()) {
     this.#config = config;
@@ -63,6 +77,10 @@ export class DecisionService {
 
   get pendingCount(): number {
     return this.#pending.size;
+  }
+
+  listPending(): PendingSummary[] {
+    return [...this.#pendingSummaries.values()];
   }
 
   release(decisionId: string, decision: 'allow' | 'deny'): boolean {
@@ -78,11 +96,17 @@ export class DecisionService {
     const ccId = payload.session_id ?? 'unknown';
     let mapped = this.#sessions.get(ccId);
     if (!mapped) {
-      // Deterministic primary persona per session for this slice.
-      mapped = { sessionId: uuidv7(), workerId: 'WX-7A19' };
+      // Deterministic primary persona per session for this slice. projectId is
+      // derived from git identity ONCE here (subprocess) and cached — never on
+      // the per-call latency path (§3.5).
+      mapped = {
+        sessionId: uuidv7(),
+        workerId: 'WX-7A19',
+        projectId: deriveProjectIdentity(payload.cwd ?? process.cwd()).projectId,
+      };
       this.#sessions.set(ccId, mapped);
     }
-    return { ...mapped, projectId: projectIdFromCwd(payload.cwd) };
+    return mapped;
   }
 
   /** Chooses the hold ceiling once, at hook open (§3.4). */
@@ -140,9 +164,19 @@ export class DecisionService {
         decisionId,
       }),
     );
+    this.#pendingSummaries.set(decisionId, {
+      decisionId,
+      decisionClass: cls.decisionClass,
+      room: roomForTool(toolName, command),
+      toolCategory: toolName,
+      ...(cls.destructiveCategory ? { destructiveCategory: cls.destructiveCategory } : {}),
+      ...(cls.diffLines !== undefined ? { diffLines: cls.diffLines } : {}),
+      openedAt: new Date(now).toISOString(),
+    });
     const ceiling = this.#holdCeilingSeconds(ctx.sessionId, now);
     const handle = this.#pending.open(decisionId, key, ceiling, now);
     const outcome = await handle.promise;
+    this.#pendingSummaries.delete(decisionId);
 
     if (outcome === 'superseded') {
       this.#bus.emit(

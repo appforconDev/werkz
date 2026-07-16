@@ -1,16 +1,23 @@
-// Local HTTP server — CC hook endpoints (event-model.md §0 transport) plus a
-// local control endpoint standing in for the phone (as in the hold prototype).
+// Local HTTP server — CC hook endpoints + the phone-facing (paired) API.
 //
-//   POST /pretooluse   ← CC PreToolUse hook; replies allow/deny/ask, holds for decisions
-//   POST /activity     ← CC UserPromptSubmit etc. (§3.4 keyboard-presence signal)
-//   GET  /release?id=<decisionId>&decision=allow|deny   ← phone stand-in
-//   GET  /status       ← pending decisions
+// CC-facing (localhost, no session token — CC has none):
+//   POST /pretooluse   ← PreToolUse hook; replies allow/deny/ask, holds for decisions
+//   POST /activity     ← UserPromptSubmit etc. (§3.4 keyboard-presence signal)
+// Phone-facing (require session token from POST /pair):
+//   POST /pair         { token }         → { sessionToken }
+//   GET  /pending                        → open decisions (game-safe)
+//   GET  /status                         → pending count
+//   GET  /release?id=<id>&decision=…     → release a held decision
+// Open:
 //   GET  /health
+// Dev only (WERKZ_DEV=1):
+//   POST /dev/trust    { workerId, value }
 
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { DecisionService } from '../decisions/service.ts';
+import type { PairingManager } from '../pairing/auth.ts';
 
-function readBody(req: import('node:http').IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
     let body = '';
     req.on('data', (c) => (body += c));
@@ -18,50 +25,82 @@ function readBody(req: import('node:http').IncomingMessage): Promise<string> {
   });
 }
 
-export function createDaemonServer(service: DecisionService): Server {
+function tokenFrom(req: IncomingMessage, url: URL): string | null {
+  const auth = req.headers['authorization'];
+  if (typeof auth === 'string' && auth.startsWith('Bearer ')) return auth.slice(7);
+  return url.searchParams.get('token');
+}
+
+export interface ServerDeps {
+  service: DecisionService;
+  pairing: PairingManager;
+  devMode: boolean;
+}
+
+export function createDaemonServer({ service, pairing, devMode }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    const path = url.pathname;
 
-    if (req.method === 'GET' && url.pathname === '/health') {
+    // --- Open ---
+    if (req.method === 'GET' && path === '/health') {
       return json(res, 200, { ok: true, pending: service.pendingCount });
     }
 
-    if (req.method === 'GET' && url.pathname === '/status') {
-      return json(res, 200, { pending: service.pendingCount });
+    // --- Pairing ---
+    if (req.method === 'POST' && path === '/pair') {
+      const body = safeParse(await readBody(req));
+      const sessionToken = pairing.pair(typeof body.token === 'string' ? body.token : '');
+      return sessionToken
+        ? json(res, 200, { sessionToken })
+        : json(res, 401, { error: 'invalid or already-used pairing token' });
     }
 
-    if (req.method === 'POST' && url.pathname === '/activity') {
-      const payload = safeParse(await readBody(req));
-      service.noteActivity(payload);
-      return json(res, 200, { ok: true });
-    }
-
-    if (req.method === 'POST' && url.pathname === '/pretooluse') {
+    // --- CC-facing (localhost, no session token) ---
+    if (req.method === 'POST' && path === '/pretooluse') {
       const payload = safeParse(await readBody(req));
       const result = await service.handlePreToolUse(payload);
-      // §3.5 latency budget: log routing time for the budgeted (non-decision) path.
       if (result.route.action !== 'hold') {
         const over = result.routingLatencyMs > 50 ? ' ⚠OVER-BUDGET' : '';
-        console.log(
-          `route ${result.route.decisionClass}/${result.route.action} in ${result.routingLatencyMs.toFixed(2)}ms${over}`,
-        );
+        console.log(`route ${result.route.decisionClass}/${result.route.action} in ${result.routingLatencyMs.toFixed(2)}ms${over}`);
       }
       return json(res, 200, result.response);
     }
-
-    if (req.method === 'POST' && url.pathname === '/dev/trust') {
-      const body = safeParse(await readBody(req));
-      const workerId = typeof body.workerId === 'string' ? body.workerId : 'WX-7A19';
-      const value = typeof body.value === 'number' ? body.value : 0;
-      service.setTrust(workerId, value);
-      return json(res, 200, { workerId, value });
+    if (req.method === 'POST' && path === '/activity') {
+      service.noteActivity(safeParse(await readBody(req)));
+      return json(res, 200, { ok: true });
     }
 
-    if (req.method === 'GET' && url.pathname === '/release') {
-      const id = url.searchParams.get('id') ?? '';
-      const decision = url.searchParams.get('decision') === 'deny' ? 'deny' : 'allow';
-      const ok = service.release(id, decision);
-      return json(res, ok ? 200 : 409, ok ? { released: decision } : { error: 'no such pending decision' });
+    // --- Dev only ---
+    if (path.startsWith('/dev/')) {
+      if (!devMode) return json(res, 404, { error: 'not found' });
+      if (req.method === 'POST' && path === '/dev/trust') {
+        const body = safeParse(await readBody(req));
+        const workerId = typeof body.workerId === 'string' ? body.workerId : 'WX-7A19';
+        const value = typeof body.value === 'number' ? body.value : 0;
+        service.setTrust(workerId, value);
+        return json(res, 200, { workerId, value });
+      }
+      return json(res, 404, { error: 'not found' });
+    }
+
+    // --- Phone-facing (require session token) ---
+    const phonePaths = new Set(['/pending', '/status', '/release']);
+    if (phonePaths.has(path)) {
+      if (!pairing.verify(tokenFrom(req, url))) return json(res, 401, { error: 'unpaired — POST /pair first' });
+
+      if (req.method === 'GET' && path === '/pending') {
+        return json(res, 200, { pending: service.listPending() });
+      }
+      if (req.method === 'GET' && path === '/status') {
+        return json(res, 200, { pending: service.pendingCount });
+      }
+      if (req.method === 'GET' && path === '/release') {
+        const id = url.searchParams.get('id') ?? '';
+        const decision = url.searchParams.get('decision') === 'deny' ? 'deny' : 'allow';
+        const ok = service.release(id, decision);
+        return json(res, ok ? 200 : 409, ok ? { released: decision } : { error: 'no such pending decision' });
+      }
     }
 
     res.writeHead(404);
@@ -69,7 +108,7 @@ export function createDaemonServer(service: DecisionService): Server {
   });
 }
 
-function json(res: import('node:http').ServerResponse, code: number, body: unknown): void {
+function json(res: ServerResponse, code: number, body: unknown): void {
   res.writeHead(code, { 'content-type': 'application/json' });
   res.end(JSON.stringify(body));
 }
