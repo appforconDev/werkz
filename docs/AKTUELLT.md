@@ -17,11 +17,13 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **event-model §3.4 amendment review** — hold prototype (task 4) came back VIABLE WITH CONSTRAINTS but with a design correction: build decisions on `PreToolUse` (fires headless + interactive, gates execution) not `PermissionRequest` (never fires headless); `timeout` is a fixed hold ceiling chosen up front, not "no timeout". Rickard reads `docs/experiments/hold-prototype-results.md` and confirms the §3.4/§2 amendment before the adapter is written. Two gaps to close on real hardware in P1: full multi-hour hold + sleep/wake.
-2. **P1 daemon bootstrap** — `npx werkz`: hooks installation, QR pairing, mDNS advertise (after #1 confirmed).
-3. **P1 event adapter** — CC hook payloads → WerkzEvent per event-model.md §2 taxonomy (routed through PreToolUse per amendment).
+1. **Adapter slice review** — event-model v0.3 + first real daemon slice built (PreToolUse routing → hold → events, 54 tests, live-session demo evidence in `daemon/experiments/adapter-slice-demo.md`). Gate: Rickard reviews the demo evidence before more daemon work.
+2. **P1 daemon bootstrap** — `npx werkz`: hooks installation (inject the PreToolUse http hook at pairing), QR pairing, mDNS advertise.
+3. **P1 LAN protocol** — WebSocket event stream to the app + release channel (replace the local `/release` stand-in with the real phone).
 
-**Done:** Task 1 (concept art, 2026-07-16) · Task 2 (event-model.md v0.2 fully approved, 2026-07-16) · Task 3 (repo scaffold, 2026-07-16). P0 exit criteria met.
+**P1 exit criteria (hardware, owner Rickard, personal dogfooding):** (g1) full multi-hour wall-clock hold released to execution; (g2) laptop sleep/wake across an open hold. Relay does not ship until both green.
+
+**Done:** Task 1 (concept art) · Task 2 (event-model v0.2) · Task 3 (repo scaffold) · Task 4 (hold prototype — VIABLE) · Task 5 (event-model v0.3 + adapter slice). All 2026-07-16.
 
 ## Blocked / waiting
 
@@ -38,6 +40,7 @@
 
 ## Log
 
+- **2026-07-16 (task 5, event-model v0.3 + adapter slice)** — Amendment folded in: decision hook is `PreToolUse` (PermissionRequest demoted — never fires headless), hold ceiling fixed at open (§3.4), new §3.5 latency budget (<50 ms non-decision path, release-blocker tier) and §3.6 dedup rule. CRITICAL ASSUMPTION box → RESOLVED with two hardware gaps as P1 exit criteria. Then built the first real daemon slice under `daemon/src`: config, event bus (JSONL), classifier→router (classes + trust thresholds), dedup store, pending-hold manager, trust store, CC adapter (PreToolUse → WerkzEvent, game-safe payloads), http server (`/pretooluse`, `/release`, `/dev/trust`), runnable CLI. 54 tests pass incl. p99<50 ms latency and retry-after-deny dedup. Demo evidence: real CC 2.1.187 sessions — read auto-allowed, destructive `echo > tracked` HELD → denied → CC blocked (file unchanged), routine auto-allow logged at 2.47 ms. Slice does NOT do LAN/narration/trust-lifecycle yet.
 - **2026-07-16 (task 4, hold prototype)** — CRITICAL ASSUMPTION tested against real CC 2.1.187. VERDICT: viable with constraints. Held an http permission hook **32 min continuous → released allow → tool actually executed**; timeout honored far past the 600 s default (7200 set, 20+ min observed live). Deny blocks; timeout-overrun and server-kill both degrade gracefully (session always survived). Big correction: `PermissionRequest` does NOT fire in headless `claude -p` (4 runs, never reached the server) — build on `PreToolUse` instead (fires both modes, gates execution, same hold plumbing). §3.4 "no fixed timeout" isn't literally possible: ceiling is set when the hook opens. Also found: model retries a denied tool → hook re-fires → daemon must dedupe. Results doc written; §3.4 amendment pending Rickard. Untested-needs-hardware: full multi-hour wall-clock + sleep/wake.
 - **2026-07-16 (task 3, P0 exit)** — event-model v0.2 fully approved (task 2 closed). Monorepo scaffolded: daemon/ (Node 22+/TS/ESM, `npx werkz` bin, WerkzEvent types verbatim from event-model §1, data-driven destructive classifier with 39 passing tests, branded narration zone types with no cast path, server stubs), app/ (Flutter portrait-locked, Flame + Riverpod declared, analyze clean), backend/ (sql/ history convention, no-CLI rule documented), landing/ (Astro + Tailwind v4 placeholder), root README + CI (daemon typecheck + tests). No feature code — scaffold means scaffold. P0 exit criteria met; "Now" #1 is the hold prototype per the CRITICAL ASSUMPTION box.
 - **2026-07-16 (task 2 amend, v0.2)** — Gate feedback applied: adaptive hold strategy (hold-until-decided when phone connected + terminal quiet; 300s only at keyboard; never block unreachable), long-hold risk promoted to CRITICAL ASSUMPTION box gating all daemon work. 48h expiry clock now counts workshop-open hours only. Destructive list +3 categories (VCS data-loss, cloud/container destruction, redirection overwrites) — catch-all kept last. Octagon cost policy decided into §5 (hint always, user-initiated always, auto-suggest 2/day). Re-review pending on §3.4 only.

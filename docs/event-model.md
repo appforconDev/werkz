@@ -1,22 +1,33 @@
 # Werkz Event Model
 
-> Status: v0.2, 2026-07-16 — fully approved by Rickard. Implementation target for daemon/ P1.
+> Status: v0.3, 2026-07-16 — hold prototype resolved the critical assumption; decision hook corrected to PreToolUse. Implementation target for daemon/ P1.
 > Bridge document between `gamedesign.md` (the what) and `daemon/` (the how). Written for the build agent.
-> CC hook facts verified against code.claude.com/docs/en/hooks and platform.claude.com/docs/en/agent-sdk on 2026-07-16 — do not trust these tables blindly after ~2026-Q4; re-verify.
+> CC hook facts verified against code.claude.com/docs/en/hooks and platform.claude.com/docs/en/agent-sdk on 2026-07-16, and against a live CC 2.1.187 session (see `experiments/hold-prototype-results.md`) — do not trust these tables blindly after ~2026-Q4; re-verify.
 
-## ⚠ CRITICAL ASSUMPTION (validate in P1 week 1, before anything else in daemon/)
+## ✓ CRITICAL ASSUMPTION — RESOLVED 2026-07-16 (verdict: viable with constraints)
 
-**The entire remote-decision value prop rides on holding a `PermissionRequest`
-hook open for a LONG time** — minutes to hours — while the phone decides.
-Docs confirm configurable timeouts and allow/deny responses; they do NOT
-confirm that hour-long synchronous holds are stable (CLI spinner UX, hook
-retry behavior, connection lifecycle). The P1 week-1 prototype MUST test
-hour-long holds against a real CC session before any other daemon work
-proceeds. If long holds prove unstable, the fallback is
-**advisory-after-the-fact** (decision recorded, applied to trust, but CC's
-terminal dialog resolved the actual permission) — that fallback is a
-**degraded mode**, not the design. If we find ourselves building the product
-on the fallback, stop and re-plan with Rickard.
+The remote-decision value prop rides on holding a permission-class hook open
+for a long time while the phone decides. **Tested against live CC 2.1.187**
+(`experiments/hold-prototype-results.md`): a hook was held **32 min continuous
+→ released allow → the tool actually executed**; the `timeout` field is
+honored far past its 600 s default (7200 set, observed). Deny blocks; timeout
+overrun and daemon death both degrade gracefully — the session always
+survived. **Viable.**
+
+Two corrections came out of the test and are folded into this version:
+1. **The decision hook is `PreToolUse`, not `PermissionRequest`** — the latter
+   never fires in headless mode (§2, §3.4).
+2. **The hold ceiling is fixed when the hook opens** — "hold with no timeout"
+   is not literally possible; adaptive hold picks the timeout up front (§3.4).
+
+**Remaining hardware gaps → P1 exit criteria, owner: Rickard (personal
+dogfooding on real laptop + phone):**
+- (g1) a full **multi-hour wall-clock** hold released to execution;
+- (g2) a **laptop sleep/wake** cycle across an open hold.
+
+Neither is expected to fail (the mechanism is proven to 32 min and the
+timeout is honored to 7200 s), but they ride real network + power state that
+this environment can't reproduce, so relay does not ship until both are green.
 
 ## 0. Architecture position
 
@@ -27,7 +38,8 @@ Claude Agent SDK (octagon spawns) ──┼──► CC ADAPTER ──► INTERN
 ```
 
 - CC is **adapter #1**, not the model. Nothing downstream of the adapter may reference CC concepts (tool names, hook names). Adapters translate; the game consumes only internal events.
-- Transport: the daemon injects hook config into the user's `~/.claude/settings.json` at pairing (hook type `http`, POST to `http://127.0.0.1:<daemonPort>/cc-hook`). No temp files, structured JSON both ways. CC also supports `command|mcp_tool|prompt|agent` handlers; we use `http` only.
+- Transport: the daemon injects hook config into the user's `~/.claude/settings.json` at pairing (hook type `http`, POST to `http://127.0.0.1:<daemonPort>/…`). No temp files, structured JSON both ways. CC also supports `command|mcp_tool|prompt|agent` handlers; we use `http` only.
+- **The decision hook is `PreToolUse`** (endpoint `/pretooluse`). It fires before every tool call in **both interactive and headless** modes, carries `permissionDecision: allow|deny|ask`, and gates execution directly. `PermissionRequest` was the original design but is **verified not to fire in headless `claude -p`** (2026-07-16 vs CC 2.1.187, 4 runs, never reached the server) — it is demoted to telemetry-if-present, never the control point.
 
 ## 1. Internal event schema
 
@@ -70,13 +82,14 @@ Legend: rooms = workshop-floor / test-workshop / archive / octagon / advisors-of
 | `UserPromptSubmit` | `job.assigned` | A work order lands in the inbox; primary worker walks to desk | workshop-floor | info |
 | `Stop` | `job.completed` | Worker stamps the job done, files it; result summary counter | workshop-floor | info |
 | `StopFailure` (matcher = error type) | `job.interrupted` | Worker stops, confused; payload.reason ∈ rate_limit/server_error/… | workshop-floor | attention |
-| `PreToolUse` (any) | `task.started` | Worker animates at station (typing, hauling, welding) | per §2.2 | info |
+| `PreToolUse` (non-decision class, §3.1) | `task.started` | Worker animates at station (typing, hauling, welding). Daemon replies allow/ask in < 50 ms (§3.5) | per §2.2 | info |
+| `PreToolUse` (decision class, §3.1) | `decision.requested` | **THE REQUISITION** — decision overlay w/ diff core (§3). Daemon holds the hook until the phone decides (§3.4) | overlay | decision |
 | `PostToolUse` (any) | `task.completed` | Station animation resolves | per §2.2 | info |
 | `PostToolUseFailure` | `task.failed` | Sparks/smoke puff; retry counter ++ (fuel for narration, §4) | per §2.2 | attention |
 | `PostToolUse` (test command, see §2.2) | `test.run.passed` / `test.run.failed` | Test-workshop gauges; ≥3 consecutive fails on same target ⇒ `test.workshop.fire` (small painted fire + incident report) | test-workshop | attention / incident |
 | `PostToolUse` (Edit\|Write\|NotebookEdit) | `file.edited` | Desk activity, paper output; payload has line counts only | workshop-floor | info |
 | `PostToolUse` (Read\|Grep\|Glob) | `records.pulled` | Archive robot fetches a folder | archive | info |
-| `PermissionRequest` | `decision.requested` | **THE REQUISITION** — decision overlay w/ diff core (§3) | overlay | decision |
+| `PermissionRequest` (if present) | — | Telemetry only, demoted — does NOT fire headless (verified 2026-07-16). Never the control point | — | info |
 | `PermissionDenied` | `decision.autodenied` | Telemetry only, no scene | — | info |
 | `PreToolUse` (matcher `ExitPlanMode`) | `plan.review.requested` | Blueprint variant of the requisition (approve the plan) | overlay | decision |
 | `PreToolUse` (matcher `EnterPlanMode`) | `plan.drafting` | Worker at drafting table with blueprints | advisors-office | info |
@@ -108,17 +121,20 @@ The classifier is data (JSON in daemon config), not code — extending it must n
 
 ### 3.1 What escalates
 
-Every `PermissionRequest` becomes `decision.requested`. The daemon then routes:
+Every `PreToolUse` call is classified. The daemon then routes:
 
-| Class | Definition | Trust ≥ threshold ⇒ auto-approve? |
-|---|---|---|
-| read | Read-only tools & read-only Bash (classifier) | 25 |
-| routine | Test/install/build commands, non-destructive Bash | 50 |
-| small-diff | Edit/Write, diff < 20 lines, file not matching critical globs (`**/.env*`, `**/secrets*`, CI configs, lockfiles opt-in) | 75 |
-| large-diff | Any edit ≥ 20 lines or critical file | never — always user |
-| **destructive** | See 3.2 | **NEVER — hard line, enforced in daemon routing, unbypassable by config** |
+| Class | Definition | Trust ≥ threshold ⇒ auto-approve? | Hook path |
+|---|---|---|---|
+| read | Read-only tools & read-only Bash (classifier) | 25 | non-decision |
+| routine | Test/install/build commands, non-destructive Bash | 50 | non-decision |
+| small-diff | Edit/Write, diff < 20 lines, file not matching critical globs (`**/.env*`, `**/secrets*`, CI configs, lockfiles opt-in) | 75 | non-decision |
+| large-diff | Any edit ≥ 20 lines or critical file | never — always user | **decision (hold)** |
+| **destructive** | See 3.2 | **NEVER — hard line, enforced in daemon routing, unbypassable by config** | **decision (hold)** |
 
-Auto-approve = daemon replies to the hook with `permissionDecision: "allow"`. Everything else replies `ask` after the phone decision, or lets CC's own dialog stand if unreachable. Threshold numbers 25/50/75 are GDD §4.1 starting values — daemon reads them from config for beta calibration.
+- **Non-decision path:** if trust clears the threshold, daemon replies `permissionDecision: "allow"` instantly; otherwise `permissionDecision: "ask"` (CC's own dialog handles it — we do not hold). Either way the reply is immediate and must meet the §3.5 latency budget.
+- **Decision path:** daemon holds the hook (§3.4) and emits `decision.requested`; the phone's answer becomes `allow`/`deny`.
+
+Threshold numbers 25/50/75 are GDD §4.1 starting values — daemon reads them from config for beta calibration.
 
 ### 3.2 Destructive classification (proposal — approve/amend this list)
 
@@ -159,17 +175,32 @@ created ─► notified ─► decided(approved|denied) ─► applied ─► ou
 
 Notification touchpoint #1 (decision pending) fires on `decision.requested` only — one push per decision, no reminders (re-engagement ban).
 
-### 3.4 Hold strategy (adaptive — pending re-review)
+### 3.4 Hold strategy (adaptive — the ceiling is chosen ONCE, at hook open)
 
-The `PermissionRequest` hook handler **blocks the CC session synchronously** until it responds. The daemon holds adaptively based on where the user plausibly is:
+A held `PreToolUse` hook **blocks that CC tool call synchronously** until the daemon responds or the hook's `timeout` elapses. **The `timeout` is fixed when the hook fires and cannot be extended mid-hold** (verified — CC closes the connection at exactly `timeout`). So "hold until decided, no timeout" is not literally achievable; the daemon picks the ceiling up front from where the user plausibly is:
 
-| Condition | Hold behavior |
+| Condition | Hold behavior (timeout chosen at open) |
 |---|---|
-| Phone paired/connected AND no terminal activity detected | **Hold until decided — no fixed timeout.** The user is away; the phone IS the decision surface (see CRITICAL ASSUMPTION box) |
-| Terminal activity suggests user at keyboard (interactive CC events — e.g. `UserPromptSubmit` — within the activity window, config `terminalActivityWindowMinutes`, default 5) | Hold max `decisionHoldSeconds` (default 300), then reply `ask` — CC's own terminal dialog takes over |
+| Phone paired/connected AND no terminal activity detected | Set `timeout` = `awayHoldSeconds` (default **7200** — 2 h, the confirmed-honored ceiling). The user is away; the phone is the decision surface. If undecided at 7200 s → superseded (below) |
+| Terminal activity suggests user at keyboard (interactive CC events — e.g. `UserPromptSubmit` — within `terminalActivityWindowMinutes`, default 5) | Set `timeout` = `keyboardHoldSeconds` (default **300**), then CC's own terminal dialog takes over |
 | Phone not connected / unreachable | Reply `ask` immediately — never block a session that nothing can answer |
 
-When the terminal dialog supersedes a pending game decision, the daemon records `decision.superseded` (no trust effect). Advisory-after-the-fact recording exists only as the degraded mode described in the CRITICAL ASSUMPTION box.
+**Walk-away edge case:** the user is at the keyboard when the hook opens (→ 300 s ceiling picked) and then walks away before deciding. The ceiling cannot be raised for this hook; at 300 s CC's dialog supersedes and the daemon records `decision.superseded` (no trust effect). This is the accepted degraded path, not a break — the next tool call, with the phone now the only surface, gets the 7200 s ceiling. Tuning `keyboardHoldSeconds` trades keyboard-latency against walk-away tolerance.
+
+When the terminal dialog supersedes a pending game decision, the daemon records `decision.superseded` (no trust effect). Advisory-after-the-fact recording exists only as the degraded mode described in the RESOLVED assumption box.
+
+### 3.5 Latency budget (HARD RULE — product-breaking if violated)
+
+`PreToolUse` fires on **every** tool call, most of which are non-decision (read/routine/auto-approved). **The non-decision routing path must respond in < 50 ms locally** (classify → trust check → reply `allow`/`ask`). A slow router adds latency to every single tool the user's agents run — it would make Werkz feel like it *slows coding down*, the opposite of the product. This is the same severity tier as a sanitizer leak (§4.3): a routing path that regresses past budget is a release blocker, not a perf nicety.
+
+Rules:
+- No network, disk sync, or LLM call on the non-decision path. Classifier data is loaded once at boot and held in memory.
+- Only **decision-classed** calls may hold (§3.4). Everything else replies immediately.
+- The daemon measures and logs per-call routing latency; p99 over budget trips an alarm in dev and a counter in prod.
+
+### 3.6 Decision dedup (retry-after-deny re-fires the hook)
+
+Verified in the hold prototype: after a `deny`, the model often **retries the same tool**, which fires `PreToolUse` again for the same logical decision. The daemon deduplicates: a decision key is `(sessionId, toolName, hash(tool_input))`. Within `decisionDedupWindowSeconds` (default 120) a repeat key does **not** raise a second requisition — it reuses the prior decision's outcome (deny → deny, or re-hold only if the prior was superseded/expired). The user never sees the same requisition twice for one retrying tool call.
 
 ## 4. Narration trigger classes
 
@@ -232,7 +263,7 @@ Upset flag feeds golden-moment weighting (§4.1). Notification touchpoint #2 fir
 
 *(Long-hold stability was promoted to the CRITICAL ASSUMPTION box at the top of this doc. Octagon cost policy was decided and moved into §5.)*
 
-1. **Diff availability at PermissionRequest time.** For `Edit/Write` the pending diff is derivable from `tool_input`, but for `Bash` there is no diff — the overlay's "diff core" for command decisions is the command text itself. Confirm rendering rules per class.
+1. **Diff availability at PreToolUse time.** For `Edit/Write` the pending diff is derivable from `tool_input` (present in the hook payload — verified), but for `Bash` there is no diff — the overlay's "diff core" for command decisions is the command text itself. Confirm rendering rules per class.
 2. **Test detection fidelity.** Test runs surface as `Bash` PostToolUse with exit info in `tool_output` — mapping pass/fail requires output parsing per runner. The classifier list (§2.2) needs beta telemetry; unknown runners degrade to `task.completed` (acceptable).
 3. **`Notification` matcher inventory.** Docs list `permission_prompt`, `idle_prompt`, `auth_success`, `elicitation_dialog`, "etc." — enumerate the full set empirically during P1; only `idle_prompt` is load-bearing (worker.waiting).
 4. **Multi-session / multi-project.** One daemon, several concurrent CC sessions in different repos: sessionId mapping is designed for it, but room/worker presentation for project #2 is a paid-tier P4 concern — v1 renders the active project only.
@@ -243,3 +274,4 @@ Upset flag feeds golden-moment weighting (§4.1). Notification touchpoint #2 fir
 - Claude Code hooks reference — code.claude.com/docs/en/hooks (fetched 2026-07-16)
 - Agent SDK (TS/Python) — platform.claude.com/docs/en/agent-sdk/typescript, /python (fetched 2026-07-16)
 - Agent loop — code.claude.com/docs/en/agent-sdk/agent-loop
+- Hold prototype (live CC 2.1.187) — `experiments/hold-prototype-results.md` (2026-07-16)
