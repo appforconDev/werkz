@@ -10,50 +10,51 @@ import '../theme.dart';
 // The baked steel frames are cropped out of the room images (task 11.4), so
 // storeys sit nearly edge to edge, separated by a single thin uniform floor
 // slab. Floor-name chips overlay each room's top-left corner. Rooms fill the
-// slab via BoxFit.cover (frame gone → no logo to crop). Inactive rooms dim.
-// Ambient workers/sprites arrive with the Flame layer (P2 slice 2).
+// slab via BoxFit.cover. Inactive rooms dim.
 //
-// Seam heights and per-room cover alignments come from LayoutTuning (task 17 C):
-// defaults are the shipped constants, and the debug tuning panel moves them
-// live on device. At the iPhone-12 layout the panels are slightly
-// narrower-aspect than the 892×474 art, so cover crops HORIZONTALLY and the
-// full image height shows; the y-alignments only matter if a taller chrome
-// ever flips cover to a vertical crop.
+// SCROLLABLE, PER-ROOM HEIGHTS (task 17b). Each storey has its own slot height
+// (LayoutTuning): the advisor is taller because its signage plate is baked BELOW
+// the floor line and a uniform-height slot crops it away. The stack scrolls when
+// the storeys total more than the viewport — so a taller penthouse and a debug
+// tuning panel can never hide a seam. `scrollPadding` adds FOOT room (only) so a
+// bottom-docked tuning panel can be scrolled past without pushing the rooms down.
 class StackedWorkshop extends ConsumerWidget {
   final String activeRoom;
-  const StackedWorkshop({super.key, required this.activeRoom});
+  final double scrollPadding;
+  const StackedWorkshop({super.key, required this.activeRoom, this.scrollPadding = 0});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(layoutTuningProvider);
-    final order = <(String room, String asset, String label, double alignY, double seamAbove)>[
-      ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.alignAdvisorY, 0),
-      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.alignWorkshopY, t.seamAdvisorFloor),
-      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.alignArchiveY, t.seamFloorArchive),
+    final order = <(String room, String asset, String label, double alignY, double height, double seamAbove)>[
+      ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.alignAdvisorY, t.advisorHeight, 0),
+      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.alignWorkshopY, t.workshopHeight, t.seamAdvisorFloor),
+      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.alignArchiveY, t.archiveHeight, t.seamFloorArchive),
     ];
 
-    // Rooms sit below the status bar (HomeScreen lays them out that way), so no
-    // safe-area inset is needed here — chips ride each room's top-left corner.
     return Container(
       color: Werkz.gunmetal,
-      child: Column(
-        children: [
-          for (var i = 0; i < order.length; i++) ...[
-            // Explicit, IDENTICAL treatment at every seam (task 15 C3): a steel
-            // bar with a lit top edge, so both floors read uniformly regardless
-            // of how dark the adjoining room art is. Height is per-seam tunable.
-            if (i > 0) _FloorSlab(height: order[i].$5),
-            Expanded(
-              child: _RoomPanel(
-                asset: order[i].$2,
-                label: order[i].$3,
-                active: order[i].$1 == activeRoom,
-                align: Alignment(0, order[i].$4),
-                chipTopInset: 4,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: scrollPadding),
+        child: Column(
+          children: [
+            for (var i = 0; i < order.length; i++) ...[
+              // Explicit, IDENTICAL treatment at every seam (task 15 C3): a steel
+              // bar with a lit top edge. Height is per-seam tunable.
+              if (i > 0) _FloorSlab(height: order[i].$6),
+              SizedBox(
+                height: order[i].$5,
+                child: _RoomPanel(
+                  asset: order[i].$2,
+                  label: order[i].$3,
+                  active: order[i].$1 == activeRoom,
+                  align: Alignment(0, order[i].$4),
+                  chipTopInset: 4,
+                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -89,7 +90,8 @@ class _RoomPanel extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Frame cropped → cover fills the slab edge to edge with no signage loss.
+          // Frame cropped → cover fills the slot; a slot taller than the art's
+          // fit-width height shows the FULL art height (advisor plate included).
           Opacity(
             opacity: active ? 1.0 : 0.55,
             child: Image.asset(asset, fit: BoxFit.cover, alignment: align),

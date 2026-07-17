@@ -112,7 +112,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (ws.unreachable) const _UnreachableBanner(),
               if (showPreflight) _PreflightBanner(preflight: pf),
               if (ws.autopilot) const _AutopilotBanner(),
-              Expanded(child: StackedWorkshop(activeRoom: _activeRoom(ws))),
+              Expanded(
+                child: StackedWorkshop(
+                  activeRoom: _activeRoom(ws),
+                  // When the debug tuning panel is open, give the stack head/foot
+                  // scroll room so a docked panel can never hide a seam (task 17b).
+                  scrollPadding: tuningVisible ? 340 : 0,
+                ),
+              ),
               _BottomBar(
                 unread: unread,
                 onLog: () => _openLog(ws),
@@ -120,10 +127,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
-          // Debug layout tuning floats over the rooms so the values move LIVE
-          // in front of you (task 17 C).
-          if (tuningVisible)
-            Positioned(left: 0, right: 0, bottom: barHeight, child: const LayoutTuningPanel()),
+          // Debug layout tuning — a compact draggable overlay that self-positions
+          // (docks top/bottom, collapses) so the rooms scroll underneath (task 17b).
+          if (tuningVisible) const LayoutTuningPanel(),
           // Work-order status floats ABOVE the bottom bar as an overlay — it must
           // never reflow the room stack when appearing/dismissing (task 16 B2).
           if (ws.workOrder.phase != WorkOrderPhase.idle)

@@ -14,9 +14,28 @@ will change once defaults move; that is expected and correct this time).
 
 Slider → field mapping:
 - app-bar top gap → `appBarTopGap` (status-bar row top padding, home_screen `_StatusBar`)
+- advisor/workshop/archive height → `advisorHeight` / `workshopHeight` / `archiveHeight` (per-room SLOT height, stacked_workshop) — task 17b
 - seam advisor/floor → `seamAdvisorFloor`, seam floor/archive → `seamFloorArchive` (stacked_workshop `_FloorSlab`)
-- align advisor/workshop/archive y → `alignAdvisorY` / `alignWorkshopY` / `alignArchiveY` (BoxFit.cover y-alignment)
+- align advisor/workshop/archive (band) → `alignAdvisorY` / `alignWorkshopY` / `alignArchiveY` (BoxFit.cover y-alignment — WHICH band of the wider art shows)
 - bottom bar height / pad → `bottomBarHeight` / `bottomBarPad` (home_screen `_BottomBar`)
+
+## Task 17b additions (done — panel usability + the advisor fix)
+
+Rickard's insight: the ADVISOR is the only room whose signage plate is baked
+BELOW its floor line, so a uniform-height slot crops it away. Fix = per-room
+slot HEIGHTS, and the advisor ships TALLER (`advisorHeight` default 288 vs 224
+for the others — also thematically right for the penthouse). The room stack is
+now a `SingleChildScrollView` of fixed-height storeys, so when they total more
+than the viewport (they do: 288+224+224+seams > iPhone-12 room area) the stack
+SCROLLS — the bottom seam is never permanently hidden.
+
+The tuning panel is now a compact, DRAGGABLE overlay: drag the header (or the ⇅
+button) to dock top/bottom, collapse to a thin bar, and the rooms scroll
+underneath (`scrollPadding` gives foot room to scroll past a bottom-docked
+panel). Values PERSIST across restarts in debug (secure storage, key
+`werkz.layoutTuning`) so a rebuild doesn't wipe an in-progress tuning session;
+RESET clears it. When the numbers arrive, still just hardcode the `LayoutTuning`
+constructor defaults — including the three new heights.
 
 ## Why this method exists
 

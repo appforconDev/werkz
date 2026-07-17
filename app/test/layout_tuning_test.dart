@@ -40,24 +40,24 @@ void main() {
     expect(find.text('WERKZ'), findsOneWidget);
   });
 
-  testWidgets('a slider change applies LIVE and shows its number', (t) async {
+  testWidgets('a per-room height slider applies LIVE and shows its number', (t) async {
     await pumpGoldenApp(t, app: _app());
     final container = ProviderScope.containerOf(t.element(find.byType(HomeScreen)));
     container.read(layoutTuningPanelVisibleProvider.notifier).show();
     await t.pumpAndSettle();
 
-    // Drag the bottom-bar-height slider fully right → value hits its max (64)
-    // and the rendered bottom bar grows to match.
-    final slider = find.byType(Slider).at(6); // 7th row: bottom bar height
-    await t.drag(slider, const Offset(300, 0));
+    // Row order: app-bar gap, ADVISOR HEIGHT, workshop, archive, … Advisor height
+    // is the 2nd slider (index 1) and the point of task 17b — drag it to its max.
+    final slider = find.byType(Slider).at(1);
+    await t.drag(slider, const Offset(400, 0));
     await t.pumpAndSettle();
 
-    expect(container.read(layoutTuningProvider).bottomBarHeight, 64);
-    expect(find.text('64.0'), findsOneWidget);
+    expect(container.read(layoutTuningProvider).advisorHeight, 420);
+    expect(find.text('420'), findsOneWidget);
 
-    // RESET restores the shipped defaults.
+    // RESET restores the shipped defaults (advisor taller than the others).
     await t.tap(find.text('RESET'));
     await t.pumpAndSettle();
-    expect(container.read(layoutTuningProvider).bottomBarHeight, 42);
+    expect(container.read(layoutTuningProvider).advisorHeight, 288);
   });
 }
