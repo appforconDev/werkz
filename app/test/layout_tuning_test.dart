@@ -52,12 +52,30 @@ void main() {
     await t.drag(slider, const Offset(400, 0));
     await t.pumpAndSettle();
 
-    expect(container.read(layoutTuningProvider).advisorHeight, 420);
-    expect(find.text('420'), findsOneWidget);
+    expect(container.read(layoutTuningProvider).advisorHeight, 480); // slider max
+    expect(find.text('480'), findsOneWidget);
 
     // RESET restores the shipped defaults (advisor taller than the others).
     await t.tap(find.text('RESET'));
     await t.pumpAndSettle();
     expect(container.read(layoutTuningProvider).advisorHeight, 288);
+  });
+
+  // Task 17c acceptance guard: the advisor MUST render with BoxFit.fitHeight so
+  // its full art height (incl. the plate baked below the floor line) always
+  // shows; cover geometrically cannot. Workshop/archive keep cover.
+  testWidgets('advisor renders fitHeight, workshop/archive render cover', (t) async {
+    await pumpGoldenApp(t, app: _app());
+
+    BoxFit fitOf(String asset) {
+      final img = t.widget<Image>(find.byWidgetPredicate(
+        (w) => w is Image && w.image is AssetImage && (w.image as AssetImage).assetName == asset,
+      ));
+      return img.fit!;
+    }
+
+    expect(fitOf('assets/art/advisors-office.png'), BoxFit.fitHeight);
+    expect(fitOf('assets/art/workshop-floor.png'), BoxFit.cover);
+    expect(fitOf('assets/art/archive.png'), BoxFit.cover);
   });
 }

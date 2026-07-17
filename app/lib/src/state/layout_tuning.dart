@@ -8,23 +8,29 @@ import 'providers.dart' show secureStorageProvider;
 // numbers back, CC hardcodes them here. This ends the remote-guessing loop:
 // spacing is tuned where it renders, not estimated from goldens.
 //
-// PER-ROOM SLOT HEIGHTS (task 17b): the room art is landscape (892×474) and each
-// storey's signage sits in a different band — critically, the ADVISOR plate is
-// baked BELOW its floor line, so a slot shorter than the art's full height crops
-// it away. Fixed per-room heights let the advisor be taller than the others (its
-// plate reads, and a taller penthouse is thematically right) while the whole
-// stack scrolls when it exceeds the viewport. cover-crop is inherent (art is
-// wider-aspect than any slot); the align sliders only pick WHICH band shows when
-// a slot is short enough to crop vertically.
+// PER-ROOM FIT MODE (task 17c — the actual root cause of 16/17/17b). BoxFit.cover
+// scales the art to fill BOTH the slot's width and height and crops the overflow,
+// so it can NEVER show the full art height: raising a room's height just zooms in
+// and crops MORE. The advisor's signage plate is baked BELOW its floor line, so
+// cover geometrically cannot reveal it. Fix: the advisor uses BoxFit.fitHeight —
+// the FULL art height always shows (plate guaranteed); the sides crop against the
+// screen width, and its align slider PANS X (which horizontal slice shows).
+// Workshop/archive keep cover + Y-band alignment because their signage is mid-art.
+// Per-room slot heights still set how much vertical space each storey gets; the
+// stack scrolls when the storeys exceed the viewport.
+enum RoomFit { cover, fitHeight }
 class LayoutTuning {
   final double appBarTopGap;     // status-bar row top padding, below the notch inset
   final double seamAdvisorFloor; // floor-slab height at the advisor/workshop seam
   final double seamFloorArchive; // floor-slab height at the workshop/archive seam
-  final double alignAdvisorY;    // BoxFit.cover y-alignment per room, -1..1
+  final RoomFit advisorFit;      // fitHeight → align is X-pan; cover → align is Y-band
+  final RoomFit workshopFit;
+  final RoomFit archiveFit;
+  final double alignAdvisorY;    // X-pan (fitHeight) or Y-band (cover), -1..1
   final double alignWorkshopY;
   final double alignArchiveY;
-  final double advisorHeight;    // per-room slot heights (task 17b) — advisor taller
-  final double workshopHeight;   // so its below-the-floor plate is not cropped away
+  final double advisorHeight;    // per-room slot heights — how much vertical space
+  final double workshopHeight;
   final double archiveHeight;
   final double bottomBarHeight;  // content height of the steel bottom bar
   final double bottomBarPad;     // extra padding under the bar content, above the home indicator
@@ -33,10 +39,13 @@ class LayoutTuning {
     this.appBarTopGap = 3,
     this.seamAdvisorFloor = 5,
     this.seamFloorArchive = 5,
-    this.alignAdvisorY = 0.15,
+    this.advisorFit = RoomFit.fitHeight, // full art height → plate below the floor line reads
+    this.workshopFit = RoomFit.cover,
+    this.archiveFit = RoomFit.cover,
+    this.alignAdvisorY = 0.0, // centered X-pan for the fitHeight advisor
     this.alignWorkshopY = 0.0,
     this.alignArchiveY = -0.2,
-    this.advisorHeight = 288, // taller penthouse — shows the plate below its floor line
+    this.advisorHeight = 288, // taller penthouse
     this.workshopHeight = 224,
     this.archiveHeight = 224,
     this.bottomBarHeight = 42,
@@ -47,6 +56,9 @@ class LayoutTuning {
     double? appBarTopGap,
     double? seamAdvisorFloor,
     double? seamFloorArchive,
+    RoomFit? advisorFit,
+    RoomFit? workshopFit,
+    RoomFit? archiveFit,
     double? alignAdvisorY,
     double? alignWorkshopY,
     double? alignArchiveY,
@@ -60,6 +72,9 @@ class LayoutTuning {
         appBarTopGap: appBarTopGap ?? this.appBarTopGap,
         seamAdvisorFloor: seamAdvisorFloor ?? this.seamAdvisorFloor,
         seamFloorArchive: seamFloorArchive ?? this.seamFloorArchive,
+        advisorFit: advisorFit ?? this.advisorFit,
+        workshopFit: workshopFit ?? this.workshopFit,
+        archiveFit: archiveFit ?? this.archiveFit,
         alignAdvisorY: alignAdvisorY ?? this.alignAdvisorY,
         alignWorkshopY: alignWorkshopY ?? this.alignWorkshopY,
         alignArchiveY: alignArchiveY ?? this.alignArchiveY,
@@ -74,6 +89,9 @@ class LayoutTuning {
         'appBarTopGap': appBarTopGap,
         'seamAdvisorFloor': seamAdvisorFloor,
         'seamFloorArchive': seamFloorArchive,
+        'advisorFit': advisorFit.name,
+        'workshopFit': workshopFit.name,
+        'archiveFit': archiveFit.name,
         'alignAdvisorY': alignAdvisorY,
         'alignWorkshopY': alignWorkshopY,
         'alignArchiveY': alignArchiveY,
@@ -86,11 +104,16 @@ class LayoutTuning {
 
   factory LayoutTuning.fromJson(Map<String, dynamic> j) {
     double d(String k, double fallback) => (j[k] as num?)?.toDouble() ?? fallback;
+    RoomFit f(String k, RoomFit fallback) =>
+        RoomFit.values.firstWhere((e) => e.name == j[k], orElse: () => fallback);
     const def = LayoutTuning();
     return LayoutTuning(
       appBarTopGap: d('appBarTopGap', def.appBarTopGap),
       seamAdvisorFloor: d('seamAdvisorFloor', def.seamAdvisorFloor),
       seamFloorArchive: d('seamFloorArchive', def.seamFloorArchive),
+      advisorFit: f('advisorFit', def.advisorFit),
+      workshopFit: f('workshopFit', def.workshopFit),
+      archiveFit: f('archiveFit', def.archiveFit),
       alignAdvisorY: d('alignAdvisorY', def.alignAdvisorY),
       alignWorkshopY: d('alignWorkshopY', def.alignWorkshopY),
       alignArchiveY: d('alignArchiveY', def.alignArchiveY),

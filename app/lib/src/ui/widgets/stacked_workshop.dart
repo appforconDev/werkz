@@ -26,10 +26,10 @@ class StackedWorkshop extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(layoutTuningProvider);
-    final order = <(String room, String asset, String label, double alignY, double height, double seamAbove)>[
-      ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.alignAdvisorY, t.advisorHeight, 0),
-      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.alignWorkshopY, t.workshopHeight, t.seamAdvisorFloor),
-      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.alignArchiveY, t.archiveHeight, t.seamFloorArchive),
+    final order = <(String room, String asset, String label, RoomFit fit, double align, double height, double seamAbove)>[
+      ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.advisorFit, t.alignAdvisorY, t.advisorHeight, 0),
+      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.workshopFit, t.alignWorkshopY, t.workshopHeight, t.seamAdvisorFloor),
+      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.archiveFit, t.alignArchiveY, t.archiveHeight, t.seamFloorArchive),
     ];
 
     return Container(
@@ -41,14 +41,15 @@ class StackedWorkshop extends ConsumerWidget {
             for (var i = 0; i < order.length; i++) ...[
               // Explicit, IDENTICAL treatment at every seam (task 15 C3): a steel
               // bar with a lit top edge. Height is per-seam tunable.
-              if (i > 0) _FloorSlab(height: order[i].$6),
+              if (i > 0) _FloorSlab(height: order[i].$7),
               SizedBox(
-                height: order[i].$5,
+                height: order[i].$6,
                 child: _RoomPanel(
                   asset: order[i].$2,
                   label: order[i].$3,
                   active: order[i].$1 == activeRoom,
-                  align: Alignment(0, order[i].$4),
+                  fit: order[i].$4,
+                  align: order[i].$5,
                   chipTopInset: 4,
                 ),
               ),
@@ -80,21 +81,25 @@ class _RoomPanel extends StatelessWidget {
   final String asset;
   final String label;
   final bool active;
-  final Alignment align;
+  final RoomFit fit;
+  final double align; // fitHeight → X-pan; cover → Y-band
   final double chipTopInset;
-  const _RoomPanel({required this.asset, required this.label, required this.active, required this.align, required this.chipTopInset});
+  const _RoomPanel({required this.asset, required this.label, required this.active, required this.fit, required this.align, required this.chipTopInset});
 
   @override
   Widget build(BuildContext context) {
+    // fitHeight: full art height always shows (plate below the floor line
+    // guaranteed), sides crop against the screen width, align pans X.
+    // cover: fills both dims and crops, align picks the visible Y band.
+    final boxFit = fit == RoomFit.fitHeight ? BoxFit.fitHeight : BoxFit.cover;
+    final alignment = fit == RoomFit.fitHeight ? Alignment(align, 0) : Alignment(0, align);
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Frame cropped → cover fills the slot; a slot taller than the art's
-          // fit-width height shows the FULL art height (advisor plate included).
           Opacity(
             opacity: active ? 1.0 : 0.55,
-            child: Image.asset(asset, fit: BoxFit.cover, alignment: align),
+            child: SizedBox.expand(child: Image.asset(asset, fit: boxFit, alignment: alignment)),
           ),
           if (!active)
             const IgnorePointer(child: ColoredBox(color: Color(0x22000000))),

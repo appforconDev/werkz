@@ -106,9 +106,14 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
   }
 
   Widget _body(LayoutTuning t, LayoutTuningController c) {
+    // fitHeight → align is X-pan; cover → align is Y-band. Label the align slider
+    // by the room's current mode so it always reads true (task 17c).
+    String alignLabel(String room, RoomFit fit) =>
+        fit == RoomFit.fitHeight ? '  $room pan-x' : '  $room band-y';
+
     return Flexible(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 300),
+        constraints: const BoxConstraints(maxHeight: 320),
         child: ListView(
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -116,35 +121,71 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
             const Padding(
               padding: EdgeInsets.only(bottom: 6),
               child: Text(
-                'height = slot height (advisor taller shows its plate below the floor line).  '
-                'align = which band of the wider art the cover-crop shows.',
+                'FIT-H = full art height always shows (advisor plate below the floor line); '
+                'align pans X. COVER = fills + crops; align picks the Y band. height = slot size.',
                 style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, height: 1.3),
               ),
             ),
             _slider('app-bar top gap', t.appBarTopGap, 0, 20,
                 (v) => c.update(t.copyWith(appBarTopGap: v))),
-            _slider('advisor height', t.advisorHeight, 120, 420,
+            _fitToggle('advisor', t.advisorFit, (m) => c.update(t.copyWith(advisorFit: m))),
+            _slider('advisor height', t.advisorHeight, 120, 480,
                 (v) => c.update(t.copyWith(advisorHeight: v)), decimals: 0),
-            _slider('workshop height', t.workshopHeight, 120, 420,
+            _slider(alignLabel('advisor', t.advisorFit), t.alignAdvisorY, -1, 1,
+                (v) => c.update(t.copyWith(alignAdvisorY: v)), decimals: 2),
+            _fitToggle('workshop', t.workshopFit, (m) => c.update(t.copyWith(workshopFit: m))),
+            _slider('workshop height', t.workshopHeight, 120, 480,
                 (v) => c.update(t.copyWith(workshopHeight: v)), decimals: 0),
-            _slider('archive height', t.archiveHeight, 120, 420,
+            _slider(alignLabel('workshop', t.workshopFit), t.alignWorkshopY, -1, 1,
+                (v) => c.update(t.copyWith(alignWorkshopY: v)), decimals: 2),
+            _fitToggle('archive', t.archiveFit, (m) => c.update(t.copyWith(archiveFit: m))),
+            _slider('archive height', t.archiveHeight, 120, 480,
                 (v) => c.update(t.copyWith(archiveHeight: v)), decimals: 0),
+            _slider(alignLabel('archive', t.archiveFit), t.alignArchiveY, -1, 1,
+                (v) => c.update(t.copyWith(alignArchiveY: v)), decimals: 2),
             _slider('seam advisor/floor', t.seamAdvisorFloor, 0, 16,
                 (v) => c.update(t.copyWith(seamAdvisorFloor: v))),
             _slider('seam floor/archive', t.seamFloorArchive, 0, 16,
                 (v) => c.update(t.copyWith(seamFloorArchive: v))),
-            _slider('align advisor (band)', t.alignAdvisorY, -1, 1,
-                (v) => c.update(t.copyWith(alignAdvisorY: v)), decimals: 2),
-            _slider('align workshop (band)', t.alignWorkshopY, -1, 1,
-                (v) => c.update(t.copyWith(alignWorkshopY: v)), decimals: 2),
-            _slider('align archive (band)', t.alignArchiveY, -1, 1,
-                (v) => c.update(t.copyWith(alignArchiveY: v)), decimals: 2),
             _slider('bottom bar height', t.bottomBarHeight, 28, 64,
                 (v) => c.update(t.copyWith(bottomBarHeight: v))),
             _slider('bottom bar pad', t.bottomBarPad, 0, 24,
                 (v) => c.update(t.copyWith(bottomBarPad: v))),
           ],
         ),
+      ),
+    );
+  }
+
+  // Per-room fit-mode toggle: COVER | FIT-H (task 17c).
+  Widget _fitToggle(String room, RoomFit fit, ValueChanged<RoomFit> onChanged) {
+    Widget seg(String text, RoomFit mode) {
+      final on = fit == mode;
+      return GestureDetector(
+        onTap: () => onChanged(mode),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          color: on ? Werkz.approvalGreen : Werkz.gunmetal,
+          child: Text(text,
+              style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, fontWeight: FontWeight.bold,
+                  color: on ? Werkz.machine : Werkz.cream)),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 30,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 118,
+            child: Text('$room fit',
+                style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+          seg('COVER', RoomFit.cover),
+          const SizedBox(width: 4),
+          seg('FIT-H', RoomFit.fitHeight),
+        ],
       ),
     );
   }

@@ -12,11 +12,12 @@ shows its value).
 defaults) — change NOTHING else — then regenerate + view goldens (home goldens
 will change once defaults move; that is expected and correct this time).
 
-Slider → field mapping:
+Slider/toggle → field mapping:
 - app-bar top gap → `appBarTopGap` (status-bar row top padding, home_screen `_StatusBar`)
-- advisor/workshop/archive height → `advisorHeight` / `workshopHeight` / `archiveHeight` (per-room SLOT height, stacked_workshop) — task 17b
+- advisor/workshop/archive FIT toggle (COVER | FIT-H) → `advisorFit` / `workshopFit` / `archiveFit` (`RoomFit`) — task 17c
+- advisor/workshop/archive height → `advisorHeight` / `workshopHeight` / `archiveHeight` (per-room SLOT height, stacked_workshop)
+- align advisor/workshop/archive → `alignAdvisorY` / `alignWorkshopY` / `alignArchiveY`. MEANING DEPENDS ON FIT: FIT-H → pan X (which horizontal slice); COVER → Y band. The panel label flips ("pan-x" / "band-y") to match.
 - seam advisor/floor → `seamAdvisorFloor`, seam floor/archive → `seamFloorArchive` (stacked_workshop `_FloorSlab`)
-- align advisor/workshop/archive (band) → `alignAdvisorY` / `alignWorkshopY` / `alignArchiveY` (BoxFit.cover y-alignment — WHICH band of the wider art shows)
 - bottom bar height / pad → `bottomBarHeight` / `bottomBarPad` (home_screen `_BottomBar`)
 
 ## Task 17b additions (done — panel usability + the advisor fix)
@@ -35,7 +36,20 @@ underneath (`scrollPadding` gives foot room to scroll past a bottom-docked
 panel). Values PERSIST across restarts in debug (secure storage, key
 `werkz.layoutTuning`) so a rebuild doesn't wipe an in-progress tuning session;
 RESET clears it. When the numbers arrive, still just hardcode the `LayoutTuning`
-constructor defaults — including the three new heights.
+constructor defaults — including the three heights AND the three fit modes.
+
+## Task 17c — the ACTUAL root cause (cover vs fitHeight)
+
+17b's per-room heights were still wrong: with `BoxFit.cover` a taller slot just
+ZOOMS (scales to fill width×height, crops MORE) — it can never reveal the
+advisor's plate baked below the floor line. Fix = per-room FIT MODE. The advisor
+now uses `BoxFit.fitHeight`: the full art height always shows (plate guaranteed),
+the sides crop against screen width, and its align slider PANS X. Workshop/archive
+keep `cover` (their signage is mid-art). Acceptance test written at last:
+`layout_tuning_test.dart` asserts the advisor Image renders `fitHeight` and the
+others `cover`; the home_ambient golden shows the desk plaque AND the floor plate
+in one render. If a future room needs its full height too, flip its FIT toggle to
+FIT-H and pan X — don't reach for the height/align sliders inside `cover`.
 
 ## Why this method exists
 
