@@ -297,6 +297,14 @@ class WorkshopController extends Notifier<WorkshopState> {
     if (!_disposed) state = state.copyWith(narrationActive: present, narrationLast4: last4);
   }
 
+  /// Clear the work-order status banner (task 15 D — COMPLETED auto-dismiss or a
+  /// tap on COMPLETED/FAILED). A running job's IN PROGRESS is never cleared here.
+  void dismissWorkOrder() {
+    if (_disposed) return;
+    if (state.workOrder.phase == WorkOrderPhase.inProgress) return;
+    state = state.copyWith(workOrder: const WorkOrderStatus());
+  }
+
   /// File a work order (one directive → one headless job). Returns (ok, error?).
   Future<(bool, String?)> fileWorkOrder(String directive) async {
     final c = _client;

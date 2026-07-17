@@ -46,6 +46,17 @@ Future<void> pumpGolden(
   required String name,
   Duration settle = const Duration(milliseconds: 700),
 }) async {
+  await pumpGoldenApp(tester, app: app, settle: settle);
+  await expectGolden(tester, name);
+}
+
+/// Pump [app] at the iPhone-12 size and settle, but do NOT capture — lets a test
+/// tap/interact (open a sheet) before capturing with [expectGolden].
+Future<void> pumpGoldenApp(
+  WidgetTester tester, {
+  required Widget app,
+  Duration settle = const Duration(milliseconds: 700),
+}) async {
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = iphone12;
   addTearDown(tester.view.resetPhysicalSize);
@@ -63,6 +74,9 @@ Future<void> pumpGolden(
   // pumpAndSettle alone returns early when nothing is animating.
   await tester.pump(settle);
   await tester.pumpAndSettle(const Duration(milliseconds: 50));
+}
+
+Future<void> expectGolden(WidgetTester tester, String name) async {
   await expectLater(find.byType(MaterialApp), matchesGoldenFile('../goldens/$name.png'));
 }
 

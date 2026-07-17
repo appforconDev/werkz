@@ -56,6 +56,10 @@ class _RequisitionOverlayState extends State<RequisitionOverlay> with TickerProv
   static const double _flickVelocity = 900; // px/s completes even under threshold
   static const double _previewStart = 44;
   static const double _maxAngle = 0.30; // rad at full-width drag
+  // Beat between the card starting its fly-off and the verdict stamp slamming in
+  // (task 15 B): the card should visibly leave BEFORE the stamp hits. Device-tuned
+  // — nudge within ~150–250ms if it still feels early/late on hardware.
+  static const int _stampAfterFlyMs = 200;
 
   @override
   void dispose() {
@@ -129,7 +133,10 @@ class _RequisitionOverlayState extends State<RequisitionOverlay> with TickerProv
     _flyTarget = Offset(dir * _cardSize.width * 1.6, _drag.dy);
     _fly.addListener(() => setState(() {}));
     unawaited(_fly.forward());
-    _stamp.forward(from: 0); // slam-in / hold / fade sequence
+    // Let the card leave first, THEN slam the stamp (task 15 B).
+    Future.delayed(const Duration(milliseconds: _stampAfterFlyMs), () {
+      if (mounted) _stamp.forward(from: 0); // slam-in / hold / fade sequence
+    });
   }
 
   @override

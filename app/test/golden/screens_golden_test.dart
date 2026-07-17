@@ -6,6 +6,7 @@ import 'package:werkz_app/src/state/providers.dart';
 import 'package:werkz_app/src/daemon/daemon_client.dart' show ConnState;
 import 'package:werkz_app/src/models/pending_decision.dart';
 import 'package:werkz_app/src/models/preflight.dart';
+import 'package:werkz_app/src/models/werkz_event.dart';
 import 'package:werkz_app/src/ui/theme.dart';
 import 'package:werkz_app/src/ui/onboard_screen.dart';
 import 'package:werkz_app/src/ui/first_run_screen.dart';
@@ -42,6 +43,17 @@ const _failedPreflight = Preflight(ok: false, checks: [
   PreflightCheck(id: 'port', label: 'LAN port', ok: true, detail: '47100 bound'),
 ]);
 
+WerkzEvent _ev(String id, String type, Map<String, dynamic> payload) =>
+    WerkzEvent(eventId: id, timestamp: '2026-07-17T10:0$id:00.000Z', eventType: type, severity: 'info', workerId: 'WX-7A19', payload: payload);
+
+final _sampleFeed = <WerkzEvent>[
+  _ev('1', 'task.started', {'room': 'archive', 'toolCategory': 'Read'}),
+  _ev('2', 'task.started', {'room': 'workshop-floor', 'toolCategory': 'Edit'}),
+  _ev('3', 'decision.approved', {'room': 'workshop-floor'}),
+  _ev('4', 'worker.dispatched', {'room': 'workshop-floor', 'source': 'work-order'}),
+  _ev('5', 'job.completed', {'source': 'work-order', 'turns': 6}),
+];
+
 Widget _screen(
   Widget child, {
   List<PendingDecision> pending = const [],
@@ -49,6 +61,7 @@ Widget _screen(
   Preflight? preflight,
   WorkOrderStatus workOrder = const WorkOrderStatus(),
   bool unreachable = false,
+  List<WerkzEvent> feed = const [],
 }) {
   return ProviderScope(
     overrides: [
@@ -60,6 +73,7 @@ Widget _screen(
             preflight: preflight,
             workOrder: workOrder,
             unreachable: unreachable,
+            feed: feed,
           ))),
     ],
     child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: child),
@@ -104,6 +118,22 @@ void main() {
   testWidgets('home_unreachable', (t) async {
     await pumpGolden(t, name: 'home_unreachable',
         app: _screen(const HomeScreen(), unreachable: true));
+  });
+
+  // Bottom bar: tap LOG → incident-log sheet opens over the workshop (task 15 A).
+  testWidgets('home_log_open', (t) async {
+    await pumpGoldenApp(t, app: _screen(const HomeScreen(), feed: _sampleFeed));
+    await t.tap(find.text('LOG'));
+    await t.pumpAndSettle();
+    await expectGolden(t, 'home_log_open');
+  });
+
+  // Bottom bar: tap DISPATCH → Form 17-B sheet (task 15 A).
+  testWidgets('home_dispatch_open', (t) async {
+    await pumpGoldenApp(t, app: _screen(const HomeScreen()));
+    await t.tap(find.text('DISPATCH'));
+    await t.pumpAndSettle();
+    await expectGolden(t, 'home_dispatch_open');
   });
 
   testWidgets('settings', (t) async {

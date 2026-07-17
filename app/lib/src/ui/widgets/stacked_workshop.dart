@@ -14,15 +14,13 @@ class StackedWorkshop extends StatelessWidget {
   final String activeRoom;
   const StackedWorkshop({super.key, required this.activeRoom});
 
-  static const _slab = 3.0; // thin uniform divider between storeys
-
-  // Per-room cover alignment (task 13 C3): the room art is landscape (892×474)
+  // Per-room cover alignment (task 13/15 C): the room art is landscape (892×474)
   // and each storey panel is taller-aspect, so BoxFit.cover crops. Bias the crop
   // per room so the baked WERKZ signage survives instead of being sliced at a
-  // divider — advisor centers on the desk plaque, the floor keeps its clock sign,
-  // the archive keeps the WERKZ shelf sign (a touch above center).
+  // divider — advisor biases DOWN so the desk W-plate reads clear of the seam,
+  // the floor keeps its clock sign, the archive keeps the WERKZ shelf sign.
   static const _order = <(String room, String asset, String label, Alignment align)>[
-    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', Alignment.center),
+    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', Alignment(0, 0.45)),
     ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', Alignment(0, -0.15)),
     ('archive', 'assets/art/archive.png', 'ARCHIVE', Alignment(0, -0.25)),
   ];
@@ -32,11 +30,14 @@ class StackedWorkshop extends StatelessWidget {
     // Rooms sit below the status bar (HomeScreen lays them out that way), so no
     // safe-area inset is needed here — chips ride each room's top-left corner.
     return Container(
-      color: Werkz.gunmetal, // shows through as the floor-slab divider
+      color: Werkz.gunmetal,
       child: Column(
         children: [
           for (var i = 0; i < _order.length; i++) ...[
-            if (i > 0) const SizedBox(height: _slab),
+            // Explicit, IDENTICAL floor slab at every seam (task 15 C3): a steel
+            // bar with a lit top edge, so both floors read uniformly regardless
+            // of how dark the adjoining room art is.
+            if (i > 0) const _FloorSlab(),
             Expanded(
               child: _RoomPanel(
                 asset: _order[i].$2,
@@ -48,6 +49,22 @@ class StackedWorkshop extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// A uniform steel floor slab between storeys. Same height + treatment at every
+// seam so the floors read consistently (task 15 C3).
+class _FloorSlab extends StatelessWidget {
+  const _FloorSlab();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 5,
+      decoration: const BoxDecoration(
+        color: Werkz.gunmetal,
+        border: Border(top: BorderSide(color: Werkz.steel, width: 1)),
       ),
     );
   }

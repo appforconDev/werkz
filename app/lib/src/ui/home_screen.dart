@@ -13,8 +13,10 @@ import 'widgets/requisition_overlay.dart';
 import 'widgets/stacked_workshop.dart';
 
 // Ambient screen. Vertical layout: status bar → rooms edge-to-edge (below the
-// bar, never behind it) → incident-log drawer floating at the bottom. The
-// requisition overlay lands after a beat so the user gets spatial context first.
+// bar, clean to the bottom bar's edge) → a thin steel BOTTOM BAR that is the sole
+// access point for the incident log and dispatch (task 15 A — no permanent log
+// strip, no floating FAB). The requisition overlay lands after a beat so the user
+// gets spatial context first.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -22,11 +24,9 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _sheet = DraggableScrollableController();
-  double _collapsed = 0.09;
-  static const _expanded = 0.7;
-  double _extent = 0.09;
-  bool _ready = false; // B4b: show ambient first, then present a pending decision
+  bool _ready = false; // show ambient first, then present a pending decision
+  String? _lastSeenEventId; // newest log entry the user has seen (unread dot)
+  Timer? _woDismiss; // auto-dismiss timer for a COMPLETED work-order banner
 
   @override
   void initState() {
@@ -34,14 +34,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Timer(const Duration(milliseconds: 500), () {
       if (mounted) setState(() => _ready = true);
     });
-    _sheet.addListener(() {
-      if (mounted && (_sheet.size - _extent).abs() > 0.01) setState(() => _extent = _sheet.size);
-    });
   }
 
   @override
   void dispose() {
-    _sheet.dispose();
+    _woDismiss?.cancel();
     super.dispose();
   }
 
@@ -54,24 +51,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return 'workshop-floor';
   }
 
+  void _openLog(WorkshopState ws) {
+    // Opening clears the unread affordance.
+    setState(() => _lastSeenEventId = ws.feed.isNotEmpty ? ws.feed.last.eventId : _lastSeenEventId);
+    showIncidentLog(context, events: ws.feed, narration: ws.narration);
+  }
+
+  // COMPLETED banners self-dismiss after a beat; FAILED stays until tapped;
+  // IN PROGRESS persists while the job runs (task 15 D).
+  void _scheduleWorkOrderAutoDismiss(WorkOrderPhase phase) {
+    _woDismiss?.cancel();
+    if (phase == WorkOrderPhase.completed) {
+      _woDismiss = Timer(const Duration(milliseconds: 2500), () {
+        if (mounted) ref.read(workshopProvider.notifier).dismissWorkOrder();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ws = ref.watch(workshopProvider);
     final reduced = ref.watch(reducedEffectsProvider).asData?.value ?? false;
     final top = ws.topDecision;
-    final h = MediaQuery.of(context).size.height;
-    _collapsed = (64 / h).clamp(0.06, 0.16);
-    final drawerExpanded = _extent > (_collapsed + _expanded) / 2;
     final showOverlay = top != null && _ready;
 
     final pf = ws.preflight;
     final showPreflight = pf != null && !pf.ok;
 
+    final unread = ws.feed.isNotEmpty && ws.feed.last.eventId != _lastSeenEventId;
+
+    // Start the auto-dismiss countdown when a work order reaches COMPLETED.
+    ref.listen<WorkshopState>(workshopProvider, (prev, next) {
+      if (prev?.workOrder.phase != next.workOrder.phase) {
+        _scheduleWorkOrderAutoDismiss(next.workOrder.phase);
+      }
+    });
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Steel top → rooms (below the bar) → space for the drawer. The notch
+          // Steel top → rooms (clean to the bar) → steel bottom bar. The notch
           // inset is painted machine-gray so the clock/battery sit on the app's
           // own chrome, not a cream stripe.
           Column(
@@ -80,35 +100,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (ws.unreachable) const _UnreachableBanner(),
               if (showPreflight) _PreflightBanner(preflight: pf),
               if (ws.autopilot) const _AutopilotBanner(),
-              if (ws.workOrder.phase != WorkOrderPhase.idle) _WorkOrderStrip(status: ws.workOrder),
+              if (ws.workOrder.phase != WorkOrderPhase.idle)
+                _WorkOrderStrip(
+                  status: ws.workOrder,
+                  onDismiss: () {
+                    _woDismiss?.cancel();
+                    ref.read(workshopProvider.notifier).dismissWorkOrder();
+                  },
+                ),
               Expanded(child: StackedWorkshop(activeRoom: _activeRoom(ws))),
-              SizedBox(height: _collapsed * h), // reserve the collapsed-drawer strip
+              _BottomBar(
+                unread: unread,
+                onLog: () => _openLog(ws),
+                onDispatch: () => showWorkOrderSheet(context),
+              ),
             ],
           ),
-          _IncidentDrawer(
-            controller: _sheet,
-            collapsed: _collapsed,
-            expanded: _expanded,
-            events: ws.feed,
-            narration: ws.narration,
-          ),
-          // Small round icon FAB above the collapsed drawer handle; hidden when
-          // the drawer is open or a requisition is on screen so it never occludes
-          // either. Tooltip/long-press names it for discoverability.
-          if (top == null && !drawerExpanded)
-            Positioned(
-              right: 16,
-              bottom: _collapsed * h + 12 + MediaQuery.of(context).viewPadding.bottom,
-              child: FloatingActionButton(
-                mini: true,
-                backgroundColor: Werkz.machine,
-                foregroundColor: Werkz.cream,
-                tooltip: 'File work order',
-                shape: const CircleBorder(),
-                onPressed: () => showWorkOrderSheet(context),
-                child: const Icon(Icons.assignment_outlined, size: 20),
-              ),
-            ),
           if (showOverlay)
             RequisitionOverlay(
               key: ValueKey(top.decisionId),
@@ -116,6 +123,192 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               reducedEffects: reduced,
               onDecide: (decision) => ref.read(workshopProvider.notifier).decide(top.decisionId, decision),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// The 1955 steel bottom bar (task 15 A) — the app's chrome and sole access point
+// for LOG + DISPATCH. Stenciled labels, subtle corner rivets. Expansion-ready:
+// a third slot is reserved for the OCTAGON tab in P4.
+class _BottomBar extends StatelessWidget {
+  final bool unread;
+  final VoidCallback onLog;
+  final VoidCallback onDispatch;
+  const _BottomBar({required this.unread, required this.onLog, required this.onDispatch});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Werkz.machine,
+        border: Border(top: BorderSide(color: Werkz.gunmetal, width: 2)),
+        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8, offset: Offset(0, -2))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 54,
+          child: Stack(
+            children: [
+              // Subtle rivets in the bar corners.
+              const Positioned(left: 6, top: 6, child: _Rivet()),
+              const Positioned(right: 6, top: 6, child: _Rivet()),
+              const Positioned(left: 6, bottom: 6, child: _Rivet()),
+              const Positioned(right: 6, bottom: 6, child: _Rivet()),
+              Row(
+                children: [
+                  Expanded(child: _BarTab(icon: Icons.receipt_long, label: 'LOG', onTap: onLog, badge: unread)),
+                  Container(width: 2, height: 30, color: Werkz.gunmetal),
+                  Expanded(child: _BarTab(icon: Icons.assignment, label: 'DISPATCH', onTap: onDispatch)),
+                  // P4: reserve a third slot here for the OCTAGON tab.
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BarTab extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool badge;
+  const _BarTab({required this.icon, required this.label, required this.onTap, this.badge = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: Werkz.cream, size: 20),
+                if (badge)
+                  Positioned(
+                    right: -4, top: -3,
+                    child: Container(
+                      width: 8, height: 8,
+                      decoration: BoxDecoration(
+                        color: Werkz.stampRed, shape: BoxShape.circle,
+                        border: Border.all(color: Werkz.machine, width: 1),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontWeight: FontWeight.w900, letterSpacing: 3, fontSize: 12)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Rivet extends StatelessWidget {
+  const _Rivet();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 5, height: 5,
+      decoration: BoxDecoration(
+        color: Werkz.gunmetal, shape: BoxShape.circle,
+        border: Border.all(color: Werkz.steel, width: 0.5),
+      ),
+    );
+  }
+}
+
+// Incident-log sheet (task 15 A): opened from the LOG tab, not a permanent
+// strip. Same draggable feel as before, newest entries on top.
+void showIncidentLog(
+  BuildContext context, {
+  required List<WerkzEvent> events,
+  required Map<String, String> narration,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.3,
+      maxChildSize: 0.92,
+      expand: false,
+      builder: (context, scrollController) =>
+          _IncidentLogPanel(scrollController: scrollController, events: events, narration: narration),
+    ),
+  );
+}
+
+class _IncidentLogPanel extends StatelessWidget {
+  final ScrollController scrollController;
+  final List<WerkzEvent> events;
+  final Map<String, String> narration;
+  const _IncidentLogPanel({required this.scrollController, required this.events, required this.narration});
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = events.reversed.toList(); // newest on top
+    return Container(
+      decoration: const BoxDecoration(
+        color: Werkz.manila,
+        border: Border(top: BorderSide(color: Werkz.gunmetal, width: 2)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+      ),
+      child: Column(
+        children: [
+          // Grab handle + stenciled header.
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 6),
+            child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Werkz.gunmetal, borderRadius: BorderRadius.circular(2))),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 14),
+            child: Row(children: [
+              Icon(Icons.folder_open, size: 16, color: Werkz.machine),
+              SizedBox(width: 8),
+              Text('INCIDENT LOG',
+                  style: TextStyle(fontFamily: Werkz.mono, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 13, color: Werkz.machine)),
+            ]),
+          ),
+          const Divider(color: Werkz.gunmetal, height: 14),
+          Expanded(
+            child: lines.isEmpty
+                ? ListView(controller: scrollController, children: const [
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      child: Text('Quiet shift. The workers wait.',
+                          style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.gunmetal)),
+                    ),
+                  ])
+                : ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    itemCount: lines.length,
+                    itemBuilder: (_, i) {
+                      final e = lines[i];
+                      final narrated = narration[e.eventId];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Text('• ${narrated ?? narrate(e)}',
+                            style: TextStyle(
+                                fontFamily: Werkz.mono, fontSize: 12,
+                                color: narrated != null ? Werkz.machine : Werkz.gunmetal)),
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );
@@ -139,7 +332,8 @@ class _StatusBar extends ConsumerWidget {
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
       child: Container(
         color: Werkz.machine,
-        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+        // Tight to the iOS status bar — the notch inset above is our chrome too.
+        padding: const EdgeInsets.fromLTRB(14, 3, 14, 7),
         child: Row(
           children: [
             const Text('WERKZ', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontWeight: FontWeight.w900, letterSpacing: 2)),
@@ -288,10 +482,12 @@ class _PreflightSheet extends StatelessWidget {
 }
 
 // Work-order live status (task 13 A): a dispatch must never vanish. FILED →
-// IN PROGRESS → COMPLETED/FAILED, always visible until the next dispatch.
+// IN PROGRESS → COMPLETED/FAILED. COMPLETED self-dismisses; FAILED waits to be
+// seen; tap to dismiss either early (task 15 D).
 class _WorkOrderStrip extends StatelessWidget {
   final WorkOrderStatus status;
-  const _WorkOrderStrip({required this.status});
+  final VoidCallback onDismiss;
+  const _WorkOrderStrip({required this.status, required this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
@@ -305,18 +501,26 @@ class _WorkOrderStrip extends StatelessWidget {
           Werkz.stampRed, Icons.cancel),
       WorkOrderPhase.idle => ('', Werkz.machine, Icons.circle),
     };
-    return Container(
-      width: double.infinity,
+    // IN PROGRESS is not dismissible (the job is still running); the others are.
+    final dismissible = status.phase != WorkOrderPhase.inProgress;
+    return Material(
       color: color,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      child: Row(children: [
-        Icon(icon, color: Colors.white, size: 14),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(label,
-              style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+      child: InkWell(
+        onTap: dismissible ? onDismiss : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          child: Row(children: [
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label,
+                  style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+            if (dismissible)
+              const Icon(Icons.close, color: Colors.white70, size: 14),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 
@@ -351,113 +555,6 @@ class _AutopilotBanner extends StatelessWidget {
               style: TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontSize: 10)),
         ],
       ),
-    );
-  }
-}
-
-// Incident-log bottom drawer. Collapsed: only the manila folder tab + the
-// one-line strip are paper — the area beside the tab is TRANSPARENT so the room
-// shows through (issue 6). Expanded: full scrollable history, newest on top.
-class _IncidentDrawer extends StatelessWidget {
-  final DraggableScrollableController controller;
-  final double collapsed;
-  final double expanded;
-  final List<WerkzEvent> events;
-  final Map<String, String> narration;
-  const _IncidentDrawer({
-    required this.controller,
-    required this.collapsed,
-    required this.expanded,
-    required this.events,
-    required this.narration,
-  });
-
-  void _toggle() {
-    final target = controller.size > (collapsed + expanded) / 2 ? collapsed : expanded;
-    controller.animateTo(target, duration: const Duration(milliseconds: 240), curve: Curves.easeOut);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final lines = events.reversed.toList(); // newest on top
-
-    return DraggableScrollableSheet(
-      controller: controller,
-      initialChildSize: collapsed,
-      minChildSize: collapsed,
-      maxChildSize: expanded,
-      snap: true,
-      snapSizes: [collapsed, expanded],
-      builder: (context, scrollController) {
-        return Column(
-          children: [
-            // Folder tab (25% width) — transparent on both sides so the room
-            // shows beside it. Tapping toggles the drawer.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _toggle,
-              child: SizedBox(
-                height: 20,
-                child: Center(
-                  child: FractionallySizedBox(
-                    widthFactor: 0.25,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Werkz.kraft,
-                        border: Border(
-                          top: BorderSide(color: Werkz.gunmetal),
-                          left: BorderSide(color: Werkz.gunmetal),
-                          right: BorderSide(color: Werkz.gunmetal),
-                        ),
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
-                      ),
-                      alignment: Alignment.center,
-                      child: Container(width: 30, height: 3, color: Werkz.gunmetal),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            // Paper panel — the strip / history. Only THIS is full-width paper.
-            Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Werkz.manila,
-                  border: Border(top: BorderSide(color: Werkz.gunmetal, width: 2)),
-                  boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, -3))],
-                ),
-                child: lines.isEmpty
-                    ? ListView(controller: scrollController, children: const [
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          child: Text('Quiet shift. The workers wait.',
-                              maxLines: 1, overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.gunmetal)),
-                        ),
-                      ])
-                    : ListView.builder(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-                        itemCount: lines.length,
-                        itemBuilder: (_, i) {
-                          final e = lines[i];
-                          final narrated = narration[e.eventId];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Text('• ${narrated ?? narrate(e)}',
-                                maxLines: i == 0 ? 1 : 3,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontFamily: Werkz.mono, fontSize: 12,
-                                    color: narrated != null ? Werkz.machine : Werkz.gunmetal)),
-                          );
-                        },
-                      ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
