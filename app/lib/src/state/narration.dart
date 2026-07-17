@@ -28,6 +28,17 @@ String narrate(WerkzEvent e) {
       return p['autopilot'] == true
           ? 'Notice: workshop switched to autopilot.'
           : 'Notice: manual oversight restored.';
+    case 'worker.dispatched':
+      return 'Work order dispatched — a worker reports for duty.';
+    case 'job.completed':
+      final turns = p['turns'];
+      return 'Work order completed${turns != null ? ' ($turns turns)' : ''}. Filed.';
+    case 'job.failed':
+      return switch (p['reason']) {
+        'agent-unavailable' => 'Work order FAILED — Claude Code could not be started.',
+        'nonzero-exit' => 'Work order FAILED — the job exited with an error.',
+        _ => 'Work order FAILED. See the workshop terminal.',
+      };
     default:
       return e.eventType;
   }

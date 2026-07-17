@@ -16,10 +16,15 @@ class StackedWorkshop extends StatelessWidget {
 
   static const _slab = 3.0; // thin uniform divider between storeys
 
-  static const _order = <(String room, String asset, String label)>[
-    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR'),
-    ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR'),
-    ('archive', 'assets/art/archive.png', 'ARCHIVE'),
+  // Per-room cover alignment (task 13 C3): the room art is landscape (892×474)
+  // and each storey panel is taller-aspect, so BoxFit.cover crops. Bias the crop
+  // per room so the baked WERKZ signage survives instead of being sliced at a
+  // divider — advisor centers on the desk plaque, the floor keeps its clock sign,
+  // the archive keeps the WERKZ shelf sign (a touch above center).
+  static const _order = <(String room, String asset, String label, Alignment align)>[
+    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', Alignment.center),
+    ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', Alignment(0, -0.15)),
+    ('archive', 'assets/art/archive.png', 'ARCHIVE', Alignment(0, -0.25)),
   ];
 
   @override
@@ -37,6 +42,7 @@ class StackedWorkshop extends StatelessWidget {
                 asset: _order[i].$2,
                 label: _order[i].$3,
                 active: _order[i].$1 == activeRoom,
+                align: _order[i].$4,
                 chipTopInset: 4,
               ),
             ),
@@ -51,8 +57,9 @@ class _RoomPanel extends StatelessWidget {
   final String asset;
   final String label;
   final bool active;
+  final Alignment align;
   final double chipTopInset;
-  const _RoomPanel({required this.asset, required this.label, required this.active, required this.chipTopInset});
+  const _RoomPanel({required this.asset, required this.label, required this.active, required this.align, required this.chipTopInset});
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +70,7 @@ class _RoomPanel extends StatelessWidget {
           // Frame cropped → cover fills the slab edge to edge with no signage loss.
           Opacity(
             opacity: active ? 1.0 : 0.55,
-            child: Image.asset(asset, fit: BoxFit.cover, alignment: Alignment.center),
+            child: Image.asset(asset, fit: BoxFit.cover, alignment: align),
           ),
           if (!active)
             const IgnorePointer(child: ColoredBox(color: Color(0x22000000))),

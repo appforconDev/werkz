@@ -17,6 +17,7 @@ import { createServer, type Server, type IncomingMessage, type ServerResponse } 
 import type { DecisionService } from '../decisions/service.ts';
 import type { PairingManager } from '../pairing/auth.ts';
 import type { NarrationKeyStore } from '../narration/key-store.ts';
+import type { Preflight } from '../preflight/index.ts';
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
@@ -40,11 +41,12 @@ export interface ServerDeps {
   onReissuePairing?: () => void; // reprint the QR after a fresh token is issued
   onKeyAccepted?: () => void;    // emit key.accepted (proof-of-life narration)
   onWorkOrder?: (directive: string) => { ok: boolean; error?: string };
+  getPreflight?: () => Preflight; // startup diagnostics, exposed to the phone (task 13 B)
   log?: (msg: string) => void;
 }
 
 export function createDaemonServer({
-  service, pairing, narrationKeys, devMode, onReissuePairing, onKeyAccepted, onWorkOrder, log = () => {},
+  service, pairing, narrationKeys, devMode, onReissuePairing, onKeyAccepted, onWorkOrder, getPreflight, log = () => {},
 }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -97,7 +99,7 @@ export function createDaemonServer({
     }
 
     // --- Phone-facing (require session token) ---
-    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status', '/unpair', '/work-order']);
+    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status', '/unpair', '/work-order', '/preflight']);
     if (phonePaths.has(path)) {
       const token = tokenFrom(req, url);
       if (!pairing.verify(token)) return json(res, 401, { error: 'unpaired — POST /pair first' });
@@ -116,7 +118,17 @@ export function createDaemonServer({
         return json(res, 200, { pending: service.listPending() });
       }
       if (req.method === 'GET' && path === '/status') {
-        return json(res, 200, { pending: service.pendingCount, ...service.permissionModeSummary(), narration: narrationKeys.status() });
+        return json(res, 200, {
+          pending: service.pendingCount,
+          ...service.permissionModeSummary(),
+          narration: narrationKeys.status(),
+          ...(getPreflight ? { preflight: getPreflight() } : {}),
+        });
+      }
+      // Preflight diagnostics on their own endpoint (task 13 B) — the app polls
+      // this to raise/clear the "workshop cannot dispatch" banner.
+      if (req.method === 'GET' && path === '/preflight') {
+        return json(res, 200, getPreflight ? getPreflight() : { ok: true, checks: [] });
       }
       if (req.method === 'GET' && path === '/release') {
         const id = url.searchParams.get('id') ?? '';

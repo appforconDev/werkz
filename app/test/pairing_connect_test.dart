@@ -29,7 +29,7 @@ class _SyncFiringClient extends DaemonClient {
     connected = true;
     // The dangerous move: synchronous callback into the notifier.
     onState?.call(ConnState.connecting);
-    onWelcome?.call(const [], false, null);
+    onWelcome?.call(const [], false, null, null);
   }
 
   @override

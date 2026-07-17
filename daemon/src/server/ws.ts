@@ -15,6 +15,7 @@ import type { EventBus } from '../events/bus.ts';
 import type { DecisionService } from '../decisions/service.ts';
 import type { PairingManager } from '../pairing/auth.ts';
 import type { WerkzEvent, Severity } from '../events/types.ts';
+import type { Preflight } from '../preflight/index.ts';
 
 export const PROTOCOL_VERSION = 1;
 const HEARTBEAT_MS = 30_000;
@@ -28,9 +29,9 @@ interface ClientState {
 
 export function attachWsServer(
   httpServer: Server,
-  deps: { bus: EventBus; service: DecisionService; pairing: PairingManager },
+  deps: { bus: EventBus; service: DecisionService; pairing: PairingManager; getPreflight?: () => Preflight },
 ): { close: () => void } {
-  const { bus, service, pairing } = deps;
+  const { bus, service, pairing, getPreflight } = deps;
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Map<WebSocket, ClientState>();
 
@@ -79,6 +80,7 @@ export function attachWsServer(
             pending: service.listPending(),
             replayed: replay.length,
             ...service.permissionModeSummary(), // { mode, autopilot }
+            ...(getPreflight ? { preflight: getPreflight() } : {}), // startup diagnostics (task 13 B)
           });
           for (const e of replay) send(ws, { type: 'event', event: e });
           break;

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../daemon/daemon_client.dart';
 import '../models/werkz_event.dart';
+import '../models/preflight.dart';
 import '../state/providers.dart';
 import '../state/narration.dart';
 import 'theme.dart';
@@ -63,15 +64,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final drawerExpanded = _extent > (_collapsed + _expanded) / 2;
     final showOverlay = top != null && _ready;
 
+    final pf = ws.preflight;
+    final showPreflight = pf != null && !pf.ok;
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Status bar → rooms (below the bar) → space for the drawer.
+          // Steel top → rooms (below the bar) → space for the drawer. The notch
+          // inset is painted machine-gray so the clock/battery sit on the app's
+          // own chrome, not a cream stripe.
           Column(
             children: [
-              SafeArea(bottom: false, child: _StatusBar(ws: ws)),
+              Container(color: Werkz.machine, child: SafeArea(bottom: false, child: _StatusBar(ws: ws))),
+              if (showPreflight) _PreflightBanner(preflight: pf),
               if (ws.autopilot) const _AutopilotBanner(),
+              if (ws.workOrder.phase != WorkOrderPhase.idle) _WorkOrderStrip(status: ws.workOrder),
               Expanded(child: StackedWorkshop(activeRoom: _activeRoom(ws))),
               SizedBox(height: _collapsed * h), // reserve the collapsed-drawer strip
             ],
@@ -83,19 +91,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             events: ws.feed,
             narration: ws.narration,
           ),
-          // FAB above the collapsed drawer; hidden when the drawer is open or a
-          // requisition is on screen so it never occludes either.
+          // Small round icon FAB above the collapsed drawer handle; hidden when
+          // the drawer is open or a requisition is on screen so it never occludes
+          // either. Tooltip/long-press names it for discoverability.
           if (top == null && !drawerExpanded)
             Positioned(
               right: 16,
               bottom: _collapsed * h + 12 + MediaQuery.of(context).viewPadding.bottom,
-              child: FloatingActionButton.extended(
+              child: FloatingActionButton(
+                mini: true,
                 backgroundColor: Werkz.machine,
                 foregroundColor: Werkz.cream,
-                icon: const Icon(Icons.assignment, size: 18),
-                label: const Text('FILE WORK ORDER',
-                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, letterSpacing: 1)),
+                tooltip: 'File work order',
+                shape: const CircleBorder(),
                 onPressed: () => showWorkOrderSheet(context),
+                child: const Icon(Icons.assignment_outlined, size: 20),
               ),
             ),
           if (showOverlay)
@@ -126,7 +136,7 @@ class _StatusBar extends ConsumerWidget {
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
       child: Container(
         color: Werkz.machine,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
         child: Row(
           children: [
             const Text('WERKZ', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontWeight: FontWeight.w900, letterSpacing: 2)),
@@ -141,6 +151,141 @@ class _StatusBar extends ConsumerWidget {
       ),
     );
   }
+}
+
+// Preflight banner (task 13 B): the daemon can't dispatch until its environment
+// is sound. Show the first failing check with its actionable hint — no silent
+// degradation. Tapping opens the full list.
+class _PreflightBanner extends StatelessWidget {
+  final Preflight preflight;
+  const _PreflightBanner({required this.preflight});
+
+  @override
+  Widget build(BuildContext context) {
+    final fails = preflight.failures;
+    final first = fails.first;
+    return Material(
+      color: Werkz.stampRed,
+      child: InkWell(
+        onTap: () => showModalBottomSheet(
+          context: context,
+          backgroundColor: Werkz.cream,
+          builder: (_) => _PreflightSheet(preflight: preflight),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('WORKSHOP CANNOT DISPATCH — ${first.label.toUpperCase()} ${first.detail.toUpperCase()}',
+                      style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                ),
+                if (fails.length > 1)
+                  Text('+${fails.length - 1}', style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white70, fontSize: 11)),
+              ]),
+              if (first.hint != null) ...[
+                const SizedBox(height: 3),
+                Text(first.hint!, style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontSize: 10)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PreflightSheet extends StatelessWidget {
+  final Preflight preflight;
+  const _PreflightSheet({required this.preflight});
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('WORKSHOP DIAGNOSTICS',
+                style: TextStyle(fontFamily: Werkz.mono, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 14)),
+            const SizedBox(height: 12),
+            for (final c in preflight.checks)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(c.ok ? Icons.check_circle : Icons.cancel,
+                        color: c.ok ? Werkz.approvalGreen : Werkz.stampRed, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${c.label} — ${c.detail}',
+                              style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12, fontWeight: FontWeight.bold)),
+                          if (!c.ok && c.hint != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(c.hint!, style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.gunmetal)),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Work-order live status (task 13 A): a dispatch must never vanish. FILED →
+// IN PROGRESS → COMPLETED/FAILED, always visible until the next dispatch.
+class _WorkOrderStrip extends StatelessWidget {
+  final WorkOrderStatus status;
+  const _WorkOrderStrip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final (label, color, icon) = switch (status.phase) {
+      WorkOrderPhase.inProgress => ('WORK ORDER — IN PROGRESS', Werkz.machine, Icons.autorenew),
+      WorkOrderPhase.completed => (
+          'WORK ORDER — COMPLETED${status.turns != null ? ' (${status.turns} turns)' : ''}',
+          Werkz.approvalGreen, Icons.check_circle),
+      WorkOrderPhase.failed => (
+          'WORK ORDER — FAILED${status.reason != null ? ' (${_reason(status.reason!)})' : ''}',
+          Werkz.stampRed, Icons.cancel),
+      WorkOrderPhase.idle => ('', Werkz.machine, Icons.circle),
+    };
+    return Container(
+      width: double.infinity,
+      color: color,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: Row(children: [
+        Icon(icon, color: Colors.white, size: 14),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(label,
+              style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+        ),
+      ]),
+    );
+  }
+
+  static String _reason(String r) => switch (r) {
+        'agent-unavailable' => 'Claude Code not found',
+        'nonzero-exit' => 'job error',
+        _ => r,
+      };
 }
 
 class _AutopilotBanner extends StatelessWidget {

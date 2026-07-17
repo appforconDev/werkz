@@ -6,6 +6,7 @@ import 'package:web_socket_channel/status.dart' as ws_status;
 import '../models/pairing_payload.dart';
 import '../models/werkz_event.dart';
 import '../models/pending_decision.dart';
+import '../models/preflight.dart';
 
 // Live daemon connection (event-model.md §WS protocol). Handles pairing over
 // HTTP, then the WS channel: hello with replay-from-eventId, heartbeat,
@@ -28,7 +29,7 @@ class DaemonClient {
   ConnState state = ConnState.disconnected;
 
   void Function(WerkzEvent event)? onEvent;
-  void Function(List<PendingDecision> pending, bool autopilot, String? mode)? onWelcome;
+  void Function(List<PendingDecision> pending, bool autopilot, String? mode, Preflight? preflight)? onWelcome;
   void Function(ConnState state)? onState;
 
   DaemonClient({required this.payload, required this.sessionToken});
@@ -165,7 +166,10 @@ class DaemonClient {
         final pending = ((msg['pending'] as List?) ?? [])
             .map((e) => PendingDecision.fromJson((e as Map).cast<String, dynamic>()))
             .toList();
-        onWelcome?.call(pending, msg['autopilot'] == true, msg['mode'] as String?);
+        final pf = msg['preflight'] is Map
+            ? Preflight.fromJson((msg['preflight'] as Map).cast<String, dynamic>())
+            : null;
+        onWelcome?.call(pending, msg['autopilot'] == true, msg['mode'] as String?, pf);
         break;
       case 'event':
         final ev = WerkzEvent.fromJson((msg['event'] as Map).cast<String, dynamic>());

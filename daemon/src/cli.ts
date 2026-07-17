@@ -24,6 +24,9 @@ import { buildEvent } from './adapter/cc/index.ts';
 import { NarrationKeyStore } from './narration/key-store.ts';
 import { NarrationEngine } from './narration/engine.ts';
 import { WorkOrderManager } from './work/work-order.ts';
+import { runPreflight, type Preflight } from './preflight/index.ts';
+import { readUserConfig, patchUserConfig } from './state/user-config.ts';
+import { resolveClaudePath } from './util/claude-path.ts';
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith('--') ? args[0] : 'start';
@@ -66,6 +69,37 @@ if (command === 'qr') {
   process.exit(0);
 }
 
+if (command === 'config') {
+  // `werkz config claude-path [<path>]` — get/set the explicit claude binary
+  // path. Stored in the project's local .werkz/config.json (gitignored, never
+  // leaves the machine). Takes effect on the next daemon start.
+  const cfgDir = flag('--state', join(projectDir, '.werkz'))!;
+  const cfgPath = join(cfgDir, 'config.json');
+  const key = args[1];
+  const value = args[2] && !args[2].startsWith('--') ? args[2] : undefined;
+  if (key === 'claude-path') {
+    if (value === undefined) {
+      const cur = readUserConfig(cfgPath).claudePath;
+      const resolved = resolveClaudePath(cur);
+      console.log(`WERKZ: claude-path = ${cur ?? '(auto)'}`);
+      console.log(resolved.path
+        ? `  resolves to: ${resolved.path}  (${resolved.source}${resolved.version ? `, ${resolved.version}` : ''})`
+        : `  resolves to: NOT FOUND — set one: werkz config claude-path /path/to/claude`);
+    } else {
+      const resolved = resolveClaudePath(value);
+      if (!resolved.path) {
+        console.error(`WERKZ: ${value} is not a runnable claude binary — not saved.`);
+        process.exit(1);
+      }
+      patchUserConfig(cfgPath, { claudePath: value });
+      console.log(`WERKZ: claude-path set to ${value} (${resolved.version ?? 'ok'}). Restart the daemon to apply.`);
+    }
+  } else {
+    console.log('WERKZ: usage — werkz config claude-path [<path>]');
+  }
+  process.exit(0);
+}
+
 // start
 const identity = deriveProjectIdentity(projectDir);
 const stateDir = flag('--state', join(projectDir, '.werkz'))!;
@@ -85,7 +119,20 @@ const service = new DecisionService(defaultConfig, bus, trust, pendingPath);
 const pairing = new PairingManager(pinnedToken, sessionsPath);
 const narrationKeys = new NarrationKeyStore(join(stateDir, 'narration-key'));
 new NarrationEngine(bus, narrationKeys); // fire-and-forget Haiku narration when a key is set
-const workOrders = new WorkOrderManager(projectDir, identity.projectId, bus, (m) => console.log(`  · ${m}`));
+
+// Preflight diagnostics (task 13 B): resolve the claude binary + check the
+// environment ONCE at startup. The result gates dispatch and rides /status +
+// the WS welcome so the phone can raise an actionable banner. Config changes
+// (werkz config claude-path) take effect on the next start.
+const userConfig = readUserConfig(join(stateDir, 'config.json'));
+let preflight: Preflight = runPreflight({
+  projectDir, configClaudePath: userConfig.claudePath, port, portBindable: true,
+});
+const getPreflight = (): Preflight => preflight;
+
+const workOrders = new WorkOrderManager(
+  projectDir, identity.projectId, bus, (m) => console.log(`  · ${m}`), preflight.claudePath,
+);
 
 function persistPairingToken(): void {
   try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken); } catch { /* best effort */ }
@@ -111,9 +158,10 @@ const server = createDaemonServer({
     eventType: 'key.accepted', severity: 'info', payload: { room: 'advisors-office' },
   })),
   onWorkOrder: (directive) => workOrders.dispatch(directive),
+  getPreflight,
   log: (m) => console.log(`  · ${m}`),
 });
-const ws = attachWsServer(server, { bus, service, pairing });
+const ws = attachWsServer(server, { bus, service, pairing, getPreflight });
 
 const install = installHook(projectDir, port);
 const recovered = service.recoverPending(); // superseded any holds orphaned by a prior crash
@@ -125,7 +173,21 @@ try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pidPath, String(pr
 process.on('SIGUSR2', () => { pairing.resetPairing(); reissuePairing(); });
 process.on('SIGINT', () => { ws.close(); server.close(); try { if (existsSync(pidPath)) writeFileSync(pidPath, ''); } catch { /* ignore */ } process.exit(0); });
 
+// Port already held → recompute preflight (port fails), report it, exit clean.
+server.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code === 'EADDRINUSE') {
+    preflight = runPreflight({ projectDir, configClaudePath: userConfig.claudePath, port, portBindable: false });
+    console.error(`\nWERKZ: port ${port} is already in use. Stop the other process, or start with --port <n>.`);
+    process.exit(1);
+  }
+  throw e;
+});
+
 server.listen(port, () => {
+  // Reflect the now-bound port back into preflight so /status reports it green.
+  preflight = runPreflight({ projectDir, configClaudePath: userConfig.claudePath, port, portBindable: true });
+  workOrders.setClaudePath(preflight.claudePath);
+
   console.log(`WERKZ INDUSTRIES — daemon v0.0.1 opening the workshop.`);
   console.log(`  project:  ${projectDir}  (workshop ${identity.projectId}, by ${identity.source})`);
   console.log(`  hook:     ${install.changed ? 'installed into' : 'already present in'} ${install.path}`);
@@ -133,6 +195,11 @@ server.listen(port, () => {
   console.log(`  narration: ${narrationKeys.hasKey() ? 'BYOK key set — Haiku live' : 'templates only (no key)'}`);
   if (recovered) console.log(`  recovery: ${recovered} orphaned decision(s) superseded after restart`);
   if (devMode) console.log(`  dev mode: ON (/dev/* endpoints enabled)`);
+  // Preflight: one line per check, so a broken dependency is obvious in the terminal too.
+  console.log(`  preflight: ${preflight.ok ? 'all systems go' : 'ATTENTION — see below'}`);
+  for (const c of preflight.checks) {
+    console.log(`    [${c.ok ? '✓' : '✗'}] ${c.label}: ${c.detail}${c.ok ? '' : `  → ${c.hint ?? ''}`}`);
+  }
   printPairing(pairing.payload(lanHost(), port));
   void advertise(port);
 });

@@ -49,6 +49,19 @@ function ourHook(port: number): HttpHook {
   return { type: 'http', url: `http://127.0.0.1:${port}/pretooluse`, timeout: 7200, _werkz: WERKZ_MARKER };
 }
 
+/** True when our marked PreToolUse hook is present in this project's settings. */
+export function isHookInstalled(projectDir: string): boolean {
+  const path = settingsPath(projectDir);
+  if (!existsSync(path)) return false;
+  try {
+    const settings = readSettings(path);
+    const pre = settings.hooks?.PreToolUse ?? [];
+    return pre.some((block) => block.hooks?.some((h) => h._werkz === WERKZ_MARKER));
+  } catch {
+    return false;
+  }
+}
+
 /** Merge our PreToolUse http hook. Idempotent — updates our entry in place. */
 export function installHook(projectDir: string, port: number): { path: string; changed: boolean } {
   const path = settingsPath(projectDir);

@@ -5,6 +5,7 @@ import '../daemon/daemon_client.dart';
 import '../models/pairing_payload.dart';
 import '../models/werkz_event.dart';
 import '../models/pending_decision.dart';
+import '../models/preflight.dart';
 
 // --- Secure storage of the pairing (session token + host/port) ---
 const _kSession = 'werkz.sessionToken';
@@ -64,6 +65,18 @@ class PairingController extends AsyncNotifier<StoredPairing?> {
   }
 }
 
+// Live status of the most recent dispatched work order (task 13 A). A dispatch
+// must never vanish: it moves filed → inProgress → completed/failed and the UI
+// reflects each step.
+enum WorkOrderPhase { idle, inProgress, completed, failed }
+
+class WorkOrderStatus {
+  final WorkOrderPhase phase;
+  final String? reason; // failure reason category, when phase == failed
+  final int? turns;     // turn count, when phase == completed
+  const WorkOrderStatus({this.phase = WorkOrderPhase.idle, this.reason, this.turns});
+}
+
 // --- Live workshop state fed by the WS channel ---
 class WorkshopState {
   final ConnState conn;
@@ -75,6 +88,8 @@ class WorkshopState {
   final Map<String, String> narration;
   final bool narrationActive; // daemon confirms a BYOK key is set
   final String? narrationLast4;
+  final Preflight? preflight; // daemon startup diagnostics (null until first welcome)
+  final WorkOrderStatus workOrder;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -85,6 +100,8 @@ class WorkshopState {
     this.narration = const {},
     this.narrationActive = false,
     this.narrationLast4,
+    this.preflight,
+    this.workOrder = const WorkOrderStatus(),
   });
 
   WorkshopState copyWith({
@@ -96,6 +113,8 @@ class WorkshopState {
     Map<String, String>? narration,
     bool? narrationActive,
     String? narrationLast4,
+    Preflight? preflight,
+    WorkOrderStatus? workOrder,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -106,6 +125,8 @@ class WorkshopState {
         narration: narration ?? this.narration,
         narrationActive: narrationActive ?? this.narrationActive,
         narrationLast4: narrationLast4 ?? this.narrationLast4,
+        preflight: preflight ?? this.preflight,
+        workOrder: workOrder ?? this.workOrder,
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -158,9 +179,9 @@ class WorkshopController extends Notifier<WorkshopState> {
     client.onState = (c) {
       if (!_disposed) state = state.copyWith(conn: c);
     };
-    client.onWelcome = (pending, autopilot, mode) {
+    client.onWelcome = (pending, autopilot, mode, preflight) {
       if (_disposed) return;
-      state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode);
+      state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode, preflight: preflight);
       _syncNarration(); // retry a queued key + refresh the "narration active" chip
     };
     client.onEvent = (e) {
@@ -187,8 +208,20 @@ class WorkshopController extends Notifier<WorkshopState> {
     var pending = state.pending;
     var autopilot = state.autopilot;
     var mode = state.permissionMode;
+    var workOrder = state.workOrder;
 
     switch (e.eventType) {
+      case 'worker.dispatched':
+        if (e.payload['source'] == 'work-order') {
+          workOrder = const WorkOrderStatus(phase: WorkOrderPhase.inProgress);
+        }
+        break;
+      case 'job.completed':
+        workOrder = WorkOrderStatus(phase: WorkOrderPhase.completed, turns: e.payload['turns'] as int?);
+        break;
+      case 'job.failed':
+        workOrder = WorkOrderStatus(phase: WorkOrderPhase.failed, reason: e.payload['reason'] as String?);
+        break;
       case 'decision.requested':
         final d = PendingDecision.fromJson({
           'decisionId': e.payload['decisionId'],
@@ -215,7 +248,7 @@ class WorkshopController extends Notifier<WorkshopState> {
         mode = e.payload['mode'] as String?;
         break;
     }
-    state = state.copyWith(feed: feed, pending: pending, autopilot: autopilot, permissionMode: mode);
+    state = state.copyWith(feed: feed, pending: pending, autopilot: autopilot, permissionMode: mode, workOrder: workOrder);
   }
 
   /// Release the top decision; optimistically remove it from the queue.
@@ -258,7 +291,13 @@ class WorkshopController extends Notifier<WorkshopState> {
   Future<(bool, String?)> fileWorkOrder(String directive) async {
     final c = _client;
     if (c == null) return (false, 'not connected');
-    return c.fileWorkOrder(directive);
+    final (ok, err) = await c.fileWorkOrder(directive);
+    // Optimistic: reflect FILED immediately; the daemon's worker.dispatched /
+    // job.* events then drive it to IN PROGRESS → COMPLETED/FAILED.
+    if (ok && !_disposed) {
+      state = state.copyWith(workOrder: const WorkOrderStatus(phase: WorkOrderPhase.inProgress));
+    }
+    return (ok, err);
   }
 }
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:werkz_app/src/state/providers.dart';
 import 'package:werkz_app/src/daemon/daemon_client.dart' show ConnState;
 import 'package:werkz_app/src/models/pending_decision.dart';
+import 'package:werkz_app/src/models/preflight.dart';
 import 'package:werkz_app/src/ui/theme.dart';
 import 'package:werkz_app/src/ui/onboard_screen.dart';
 import 'package:werkz_app/src/ui/first_run_screen.dart';
@@ -26,18 +27,38 @@ const _bashDecision = PendingDecision(
 );
 
 class _SeededWorkshop extends WorkshopController {
-  final List<PendingDecision> _seed;
+  final WorkshopState _seed;
   _SeededWorkshop(this._seed);
   @override
-  WorkshopState build() => WorkshopState(conn: ConnState.connected, pending: _seed);
+  WorkshopState build() => _seed;
 }
 
-Widget _screen(Widget child, {List<PendingDecision> pending = const [], bool paired = true}) {
+const _failedPreflight = Preflight(ok: false, checks: [
+  PreflightCheck(
+      id: 'claude', label: 'Claude Code', ok: false, detail: 'not found',
+      hint: 'Install Claude Code, or set path: werkz config claude-path /path/to/claude'),
+  PreflightCheck(id: 'hook', label: 'Decision hook', ok: true, detail: 'installed in this project'),
+  PreflightCheck(id: 'node', label: 'Node runtime', ok: true, detail: 'v22.14.0'),
+  PreflightCheck(id: 'port', label: 'LAN port', ok: true, detail: '47100 bound'),
+]);
+
+Widget _screen(
+  Widget child, {
+  List<PendingDecision> pending = const [],
+  bool paired = true,
+  Preflight? preflight,
+  WorkOrderStatus workOrder = const WorkOrderStatus(),
+}) {
   return ProviderScope(
     overrides: [
       secureStorageProvider.overrideWithValue(GoldenStorage(paired ? pairedStore() : {})),
       daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
-      workshopProvider.overrideWith(() => _SeededWorkshop(pending)),
+      workshopProvider.overrideWith(() => _SeededWorkshop(WorkshopState(
+            conn: ConnState.connected,
+            pending: pending,
+            preflight: preflight,
+            workOrder: workOrder,
+          ))),
     ],
     child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: child),
   );
@@ -65,6 +86,17 @@ void main() {
     await pumpGolden(t, name: 'home_decision',
         app: _screen(const HomeScreen(), pending: [_bashDecision]),
         settle: const Duration(milliseconds: 1000));
+  });
+
+  testWidgets('home_preflight_fail', (t) async {
+    await pumpGolden(t, name: 'home_preflight_fail',
+        app: _screen(const HomeScreen(), preflight: _failedPreflight));
+  });
+
+  testWidgets('home_work_order', (t) async {
+    await pumpGolden(t, name: 'home_work_order',
+        app: _screen(const HomeScreen(),
+            workOrder: const WorkOrderStatus(phase: WorkOrderPhase.inProgress)));
   });
 
   testWidgets('settings', (t) async {
