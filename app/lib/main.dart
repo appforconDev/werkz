@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/state/providers.dart';
 import 'src/ui/pairing_screen.dart';
 import 'src/ui/home_screen.dart';
+import 'src/ui/first_run_screen.dart';
 import 'src/ui/theme.dart';
 
 // Werkz — mobile-only, portrait-locked (CLAUDE.md stack rule). Flame is for
@@ -37,7 +38,12 @@ class _Root extends ConsumerWidget {
     return pairing.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('$e'))),
-      data: (stored) => stored == null ? const PairingScreen() : const HomeScreen(),
+      data: (stored) {
+        if (stored == null) return const PairingScreen();
+        // First-run tour after the first successful pairing (once, skippable).
+        final seen = ref.watch(firstRunSeenProvider).asData?.value ?? true;
+        return seen ? const HomeScreen() : const FirstRunScreen();
+      },
     );
   }
 }

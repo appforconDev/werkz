@@ -19,6 +19,8 @@ import { printPairing } from './pairing/qr.ts';
 import { advertise } from './net/mdns.ts';
 import { installHook, uninstallHook } from './install/hooks.ts';
 import { deriveProjectIdentity } from './adapter/cc/project.ts';
+import { NarrationKeyStore } from './narration/key-store.ts';
+import { NarrationEngine } from './narration/engine.ts';
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith('--') ? args[0] : 'start';
@@ -63,11 +65,13 @@ const bus = new EventBus(eventsPath);
 const trust = undefined;
 const service = new DecisionService(defaultConfig, bus, trust, pendingPath);
 const pairing = new PairingManager(pinnedToken, sessionsPath);
+const narrationKeys = new NarrationKeyStore(join(stateDir, 'narration-key'));
+new NarrationEngine(bus, narrationKeys); // fire-and-forget Haiku narration when a key is set
 if (!pinnedToken) {
   // Persist the freshly generated token so a restart advertises the same QR.
   try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken); } catch { /* best effort */ }
 }
-const server = createDaemonServer({ service, pairing, devMode });
+const server = createDaemonServer({ service, pairing, narrationKeys, devMode });
 const ws = attachWsServer(server, { bus, service, pairing });
 
 const install = installHook(projectDir, port);
@@ -80,6 +84,7 @@ server.listen(port, () => {
   console.log(`  project:  ${projectDir}  (workshop ${identity.projectId}, by ${identity.source})`);
   console.log(`  hook:     ${install.changed ? 'installed into' : 'already present in'} ${install.path}`);
   console.log(`  ws:       ws://…:${port}/ws  (session-token auth)`);
+  console.log(`  narration: ${narrationKeys.hasKey() ? 'BYOK key set — Haiku live' : 'templates only (no key)'}`);
   if (recovered) console.log(`  recovery: ${recovered} orphaned decision(s) superseded after restart`);
   if (devMode) console.log(`  dev mode: ON (/dev/* endpoints enabled)`);
   printPairing(pairing.payload(lanHost(), port));

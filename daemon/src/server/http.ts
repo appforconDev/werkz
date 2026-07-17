@@ -16,6 +16,7 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { DecisionService } from '../decisions/service.ts';
 import type { PairingManager } from '../pairing/auth.ts';
+import type { NarrationKeyStore } from '../narration/key-store.ts';
 
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve) => {
@@ -34,10 +35,11 @@ function tokenFrom(req: IncomingMessage, url: URL): string | null {
 export interface ServerDeps {
   service: DecisionService;
   pairing: PairingManager;
+  narrationKeys: NarrationKeyStore;
   devMode: boolean;
 }
 
-export function createDaemonServer({ service, pairing, devMode }: ServerDeps): Server {
+export function createDaemonServer({ service, pairing, narrationKeys, devMode }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -85,7 +87,7 @@ export function createDaemonServer({ service, pairing, devMode }: ServerDeps): S
     }
 
     // --- Phone-facing (require session token) ---
-    const phonePaths = new Set(['/pending', '/status', '/release']);
+    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status']);
     if (phonePaths.has(path)) {
       if (!pairing.verify(tokenFrom(req, url))) return json(res, 401, { error: 'unpaired — POST /pair first' });
 
@@ -93,13 +95,24 @@ export function createDaemonServer({ service, pairing, devMode }: ServerDeps): S
         return json(res, 200, { pending: service.listPending() });
       }
       if (req.method === 'GET' && path === '/status') {
-        return json(res, 200, { pending: service.pendingCount, ...service.permissionModeSummary() });
+        return json(res, 200, { pending: service.pendingCount, ...service.permissionModeSummary(), narration: narrationKeys.status() });
       }
       if (req.method === 'GET' && path === '/release') {
         const id = url.searchParams.get('id') ?? '';
         const decision = url.searchParams.get('decision') === 'deny' ? 'deny' : 'allow';
         const ok = service.release(id, decision);
         return json(res, ok ? 200 : 409, ok ? { released: decision } : { error: 'no such pending decision' });
+      }
+      // BYOK narration key — set/clear over the paired channel; stays on the daemon.
+      if (req.method === 'POST' && path === '/narration-key') {
+        const body = safeParse(await readBody(req));
+        const key = typeof body.key === 'string' ? body.key : '';
+        if (key.trim()) narrationKeys.setKey(key, new Date().toISOString());
+        else narrationKeys.clear();
+        return json(res, 200, narrationKeys.status());
+      }
+      if (req.method === 'GET' && path === '/narration-key/status') {
+        return json(res, 200, narrationKeys.status());
       }
     }
 

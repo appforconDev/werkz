@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../daemon/daemon_client.dart';
+import '../models/werkz_event.dart';
 import '../state/providers.dart';
 import '../state/narration.dart';
 import 'theme.dart';
+import 'log_screen.dart';
+import 'settings_screen.dart';
 import 'widgets/requisition_overlay.dart';
 
 // Ambient screen: approved workshop-floor backdrop (static, NO Flame yet) + a
@@ -24,10 +27,10 @@ class HomeScreen extends ConsumerWidget {
           _backdrop(),
           Column(
             children: [
-              SafeArea(bottom: false, child: _statusBar(ws)),
+              SafeArea(bottom: false, child: _StatusBar(ws: ws)),
               if (ws.autopilot) const _AutopilotBanner(),
               const Spacer(),
-              _LogStrip(events: ws.feed),
+              _LogStrip(events: ws.feed, narration: ws.narration),
             ],
           ),
           if (top != null)
@@ -42,29 +45,46 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _backdrop() => ColorFiltered(
-        colorFilter: ColorFilter.mode(Werkz.oil.withValues(alpha: 0.15), BlendMode.darken),
-        child: Image.asset('assets/art/workshop-floor.png', fit: BoxFit.cover),
+  // Room crop fix (task 9 §3): letterbox the room art so the WERKZ wall logo is
+  // never cut in half. BoxFit.contain fits the whole frame; oil-gray fills the
+  // letterbox bars. The real stacked-building view lands with the Flame layer.
+  Widget _backdrop() => Container(
+        color: Werkz.oil,
+        alignment: Alignment.topCenter,
+        child: Image.asset('assets/art/workshop-floor.png', fit: BoxFit.contain),
       );
+}
 
-  Widget _statusBar(WorkshopState ws) {
+class _StatusBar extends ConsumerWidget {
+  final WorkshopState ws;
+  const _StatusBar({required this.ws});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final (label, color) = switch (ws.conn) {
       ConnState.connected => ('WORKSHOP OPEN', Werkz.approvalGreen),
       ConnState.connecting => ('CONNECTING…', Werkz.steel),
       ConnState.disconnected => ('WORKSHOP CLOSED', Werkz.stampRed),
     };
-    return Container(
-      color: Werkz.machine.withValues(alpha: 0.85),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: Row(
-        children: [
-          const Text('WERKZ',
-              style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontWeight: FontWeight.w900, letterSpacing: 2)),
-          const Spacer(),
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text(label, style: TextStyle(fontFamily: Werkz.mono, color: color, fontSize: 11)),
-        ],
+    return InkWell(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      ),
+      child: Container(
+        color: Werkz.machine.withValues(alpha: 0.85),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          children: [
+            const Text('WERKZ',
+                style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontWeight: FontWeight.w900, letterSpacing: 2)),
+            const Spacer(),
+            Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontFamily: Werkz.mono, color: color, fontSize: 11)),
+            const SizedBox(width: 10),
+            const Icon(Icons.settings, color: Werkz.steel, size: 16),
+          ],
+        ),
       ),
     );
   }
@@ -92,41 +112,48 @@ class _AutopilotBanner extends StatelessWidget {
   }
 }
 
+// Tap the strip → full scrollable log history.
 class _LogStrip extends StatelessWidget {
-  final List events;
-  const _LogStrip({required this.events});
+  final List<WerkzEvent> events;
+  final Map<String, String> narration;
+  const _LogStrip({required this.events, required this.narration});
 
   @override
   Widget build(BuildContext context) {
     final recent = events.reversed.take(6).toList();
-    return Container(
-      margin: const EdgeInsets.all(10),
-      constraints: const BoxConstraints(maxHeight: 160),
-      decoration: BoxDecoration(
-        color: Werkz.manila.withValues(alpha: 0.94),
-        border: Border.all(color: Werkz.gunmetal, width: 2),
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const LogScreen()),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('— INCIDENT LOG —',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, color: Werkz.gunmetal, letterSpacing: 2)),
-          const SizedBox(height: 4),
-          if (recent.isEmpty)
-            const Text('Quiet shift. The workers wait.',
-                style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.gunmetal))
-          else
-            ...recent.map((e) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 1),
-                  child: Text('• ${narrate(e)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.machine)),
-                )),
-        ],
+      child: Container(
+        margin: const EdgeInsets.all(10),
+        constraints: const BoxConstraints(maxHeight: 170),
+        decoration: BoxDecoration(
+          color: Werkz.manila.withValues(alpha: 0.94),
+          border: Border.all(color: Werkz.gunmetal, width: 2),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('— INCIDENT LOG —  (tap to expand)',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, color: Werkz.gunmetal, letterSpacing: 2)),
+            const SizedBox(height: 4),
+            if (recent.isEmpty)
+              const Text('Quiet shift. The workers wait.',
+                  style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.gunmetal))
+            else
+              ...recent.map((e) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    child: Text('• ${narration[e.eventId] ?? narrate(e)}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.machine)),
+                  )),
+          ],
+        ),
       ),
     );
   }

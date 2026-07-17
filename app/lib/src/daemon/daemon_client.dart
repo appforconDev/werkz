@@ -44,6 +44,39 @@ class DaemonClient {
     return (jsonDecode(res.body) as Map<String, dynamic>)['sessionToken'] as String?;
   }
 
+  Map<String, String> get _authHeaders => {
+        'content-type': 'application/json',
+        'authorization': 'Bearer $sessionToken',
+      };
+
+  /// Send the BYOK narration key to the daemon over the paired channel. Empty
+  /// clears it. The daemon stores it locally; it never leaves that machine.
+  Future<bool> setNarrationKey(String key) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${payload.httpBase}/narration-key'),
+        headers: _authHeaders,
+        body: jsonEncode({'key': key}),
+      );
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> narrationKeyPresent() async {
+    try {
+      final res = await http.get(
+        Uri.parse('${payload.httpBase}/narration-key/status'),
+        headers: _authHeaders,
+      );
+      if (res.statusCode != 200) return false;
+      return (jsonDecode(res.body) as Map<String, dynamic>)['present'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void connect() {
     _closed = false;
     _open();

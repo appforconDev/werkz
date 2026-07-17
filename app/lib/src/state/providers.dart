@@ -64,6 +64,8 @@ class WorkshopState {
   final List<PendingDecision> pending;
   final bool autopilot;
   final String? permissionMode;
+  // eventId → real Haiku narration line (replaces the local template when present).
+  final Map<String, String> narration;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -71,6 +73,7 @@ class WorkshopState {
     this.pending = const [],
     this.autopilot = false,
     this.permissionMode,
+    this.narration = const {},
   });
 
   WorkshopState copyWith({
@@ -79,6 +82,7 @@ class WorkshopState {
     List<PendingDecision>? pending,
     bool? autopilot,
     String? permissionMode,
+    Map<String, String>? narration,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -86,6 +90,7 @@ class WorkshopState {
         pending: pending ?? this.pending,
         autopilot: autopilot ?? this.autopilot,
         permissionMode: permissionMode ?? this.permissionMode,
+        narration: narration ?? this.narration,
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -149,6 +154,17 @@ class WorkshopController extends Notifier<WorkshopState> {
   }
 
   void _handleEvent(WerkzEvent e) {
+    // narration.ready is not a feed line itself — it upgrades an existing line
+    // from template text to the real Haiku narration.
+    if (e.eventType == 'narration.ready') {
+      final ref = e.payload['refEventId'] as String?;
+      final text = e.payload['text'] as String?;
+      if (ref != null && text != null) {
+        state = state.copyWith(narration: {...state.narration, ref: text});
+      }
+      return;
+    }
+
     final feed = [...state.feed, e];
     if (feed.length > _feedCap) feed.removeRange(0, feed.length - _feedCap);
     var pending = state.pending;
@@ -190,4 +206,32 @@ class WorkshopController extends Notifier<WorkshopState> {
     );
     if (kDebugMode) debugPrint('decided $decisionId → $decision');
   }
+
+  /// Send the BYOK narration key to the daemon (settings / first-run card 3).
+  Future<bool> setNarrationKey(String key) async {
+    final c = _client;
+    if (c == null) return false;
+    return c.setNarrationKey(key);
+  }
+}
+
+// --- First-run flow: shown once, re-openable from settings ---
+const _kSeenFirstRun = 'werkz.seenFirstRun';
+
+final firstRunSeenProvider =
+    AsyncNotifierProvider<FirstRunController, bool>(FirstRunController.new);
+
+class FirstRunController extends AsyncNotifier<bool> {
+  FlutterSecureStorage get _s => ref.read(secureStorageProvider);
+
+  @override
+  Future<bool> build() async => (await _s.read(key: _kSeenFirstRun)) == '1';
+
+  Future<void> markSeen() async {
+    await _s.write(key: _kSeenFirstRun, value: '1');
+    state = const AsyncData(true);
+  }
+
+  /// Re-open the tour from settings.
+  void reopen() => state = const AsyncData(false);
 }
