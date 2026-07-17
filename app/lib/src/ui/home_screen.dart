@@ -7,6 +7,7 @@ import '../state/narration.dart';
 import 'theme.dart';
 import 'log_screen.dart';
 import 'settings_screen.dart';
+import 'work_order_sheet.dart';
 import 'widgets/requisition_overlay.dart';
 import 'widgets/stacked_workshop.dart';
 
@@ -22,6 +23,18 @@ class HomeScreen extends ConsumerWidget {
     final top = ws.topDecision;
 
     return Scaffold(
+      // Initiate-loop: file a work order (GDD daily loop "set the day's mission").
+      // Hidden while a requisition is on screen so it doesn't fight the overlay.
+      floatingActionButton: top == null
+          ? FloatingActionButton.extended(
+              backgroundColor: Werkz.machine,
+              foregroundColor: Werkz.cream,
+              icon: const Icon(Icons.assignment, size: 18),
+              label: const Text('FILE WORK ORDER',
+                  style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, letterSpacing: 1)),
+              onPressed: () => showWorkOrderSheet(context),
+            )
+          : null,
       body: Stack(
         fit: StackFit.expand,
         children: [

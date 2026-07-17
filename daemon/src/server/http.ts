@@ -39,11 +39,12 @@ export interface ServerDeps {
   devMode: boolean;
   onReissuePairing?: () => void; // reprint the QR after a fresh token is issued
   onKeyAccepted?: () => void;    // emit key.accepted (proof-of-life narration)
+  onWorkOrder?: (directive: string) => { ok: boolean; error?: string };
   log?: (msg: string) => void;
 }
 
 export function createDaemonServer({
-  service, pairing, narrationKeys, devMode, onReissuePairing, onKeyAccepted, log = () => {},
+  service, pairing, narrationKeys, devMode, onReissuePairing, onKeyAccepted, onWorkOrder, log = () => {},
 }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -96,7 +97,7 @@ export function createDaemonServer({
     }
 
     // --- Phone-facing (require session token) ---
-    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status', '/unpair']);
+    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status', '/unpair', '/work-order']);
     if (phonePaths.has(path)) {
       const token = tokenFrom(req, url);
       if (!pairing.verify(token)) return json(res, 401, { error: 'unpaired — POST /pair first' });
@@ -139,6 +140,13 @@ export function createDaemonServer({
       }
       if (req.method === 'GET' && path === '/narration-key/status') {
         return json(res, 200, narrationKeys.status());
+      }
+      // Work order (task 11 C): one directive → one headless job.
+      if (req.method === 'POST' && path === '/work-order') {
+        const body = safeParse(await readBody(req));
+        const directive = typeof body.directive === 'string' ? body.directive : '';
+        const result = onWorkOrder?.(directive) ?? { ok: false, error: 'work orders unavailable' };
+        return json(res, result.ok ? 200 : 409, result);
       }
     }
 

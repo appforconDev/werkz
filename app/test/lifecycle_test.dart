@@ -14,6 +14,7 @@ class _FakeDaemon {
   final sessions = <String>{};
   String? key;
   bool reachable = true;
+  bool jobRunning = false;
   int _n = 0;
   _FakeDaemon(this.pairingToken);
 
@@ -46,7 +47,19 @@ class _FakeClient extends DaemonClient {
     return true;
   }
   @override
-  Future<bool> narrationKeyPresent() async => daemon.reachable && daemon.key != null;
+  Future<(bool, String?)> narrationKeyStatus() async {
+    final present = daemon.reachable && daemon.key != null;
+    return (present, present ? daemon.key!.substring(daemon.key!.length - 4) : null);
+  }
+
+  @override
+  Future<(bool, String?)> fileWorkOrder(String directive) async {
+    if (!daemon.reachable) return (false, 'workshop offline');
+    if (directive.trim().isEmpty) return (false, 'empty directive');
+    if (daemon.jobRunning) return (false, 'a work order is already in progress');
+    daemon.jobRunning = true;
+    return (true, null);
+  }
 }
 
 // In-memory secure storage.
@@ -113,9 +126,37 @@ void main() {
     container.read(workshopProvider);
     await Future<void>.delayed(Duration.zero); // flush deferred connect
 
-    final ok = await container.read(workshopProvider.notifier).setNarrationKey('sk-ant-x');
+    final ok = await container.read(workshopProvider.notifier).setNarrationKey('sk-ant-wxyz');
     expect(ok, isTrue);
-    expect(container.read(workshopProvider).narrationActive, isTrue);
+    final ws = container.read(workshopProvider);
+    expect(ws.narrationActive, isTrue);
+    expect(ws.narrationLast4, 'wxyz'); // "key ending …wxyz" display
+  });
+
+  test('work order: first dispatch ok, second rejected (one at a time)', () async {
+    _MemStorage.store.clear();
+    final daemon = _FakeDaemon('tok');
+    final s = daemon.pair('tok')!;
+    final pairing = PairingPayload(host: '127.0.0.1', port: 1, token: 'tok');
+    final container = ProviderContainer(overrides: [
+      secureStorageProvider.overrideWithValue(const _MemStorage()),
+      daemonClientBuilderProvider.overrideWithValue((p) => _FakeClient(daemon, pairing, s)),
+    ]);
+    addTearDown(container.dispose);
+    _MemStorage.store.addAll({
+      'werkz.sessionToken': s, 'werkz.host': '127.0.0.1', 'werkz.port': '1',
+      'werkz.pairToken': 'tok', 'werkz.seenFirstRun': '1',
+    });
+    await container.read(pairingControllerProvider.future);
+    container.read(workshopProvider);
+    await Future<void>.delayed(Duration.zero);
+
+    final notifier = container.read(workshopProvider.notifier);
+    expect(await notifier.fileWorkOrder(''), (false, 'empty directive'));
+    expect((await notifier.fileWorkOrder('do the thing')).$1, isTrue);
+    final (ok2, err2) = await notifier.fileWorkOrder('do another');
+    expect(ok2, isFalse);
+    expect(err2, contains('already in progress'));
   });
 
   test('key save: daemon offline → returns false (caller queues locally)', () async {

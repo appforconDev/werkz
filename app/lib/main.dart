@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/state/providers.dart';
-import 'src/ui/pairing_screen.dart';
+import 'src/ui/onboard_screen.dart';
 import 'src/ui/home_screen.dart';
 import 'src/ui/first_run_screen.dart';
 import 'src/ui/theme.dart';
@@ -39,7 +39,8 @@ class _Root extends ConsumerWidget {
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('$e'))),
       data: (stored) {
-        if (stored == null) return const PairingScreen();
+        // Unpaired → pre-pairing onboarding (camera opens only on tap).
+        if (stored == null) return const OnboardScreen();
         // First-run tour after the first successful pairing (once, skippable).
         final seen = ref.watch(firstRunSeenProvider).asData?.value ?? true;
         return seen ? const HomeScreen() : const FirstRunScreen();

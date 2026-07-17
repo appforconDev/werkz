@@ -70,22 +70,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _section('CONNECTION'),
           _row('Status', conn),
           if (pairing != null) _row('Workshop at', '${pairing.payload.host}:${pairing.payload.port}'),
-          _row('Mode', ws.permissionMode ?? 'unknown'),
-          _row('Oversight', ws.autopilot ? 'AUTOPILOT (bypassed)' : 'manual'),
+          // Hide the mode row until the daemon actually knows it (first tool call).
+          if (ws.permissionMode != null) _row('Mode', ws.permissionMode!),
+          if (ws.permissionMode != null) _row('Oversight', ws.autopilot ? 'AUTOPILOT (bypassed)' : 'manual'),
           const SizedBox(height: 24),
 
-          Row(children: [
-            _section('NARRATION KEY (OPTIONAL)'),
-            const Spacer(),
-            if (ws.narrationActive)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(border: Border.all(color: Werkz.approvalGreen)),
-                child: const Text('● NARRATION ACTIVE',
-                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, color: Werkz.approvalGreen, fontWeight: FontWeight.bold)),
-              ),
-          ]),
-          const SizedBox(height: 6),
+          _section('NARRATION'),
+          _NarrationStatusBlock(active: ws.narrationActive, last4: ws.narrationLast4),
+          const SizedBox(height: 10),
           const Text(
             'Your Anthropic (Haiku) API key powers narration. It is sent to your '
             'daemon and stays on that machine — never to us, never in git.',
@@ -98,6 +90,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12),
             decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'sk-ant-…  (blank to clear)'),
           ),
+          // Inline status UNDER the field — never a covering sheet (B2).
+          if (_msg != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_msg!, style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.approvalGreen)),
+            ),
           const SizedBox(height: 10),
           FilledButton(
             onPressed: _busy ? null : _saveKey,
@@ -105,11 +103,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('SEND KEY TO WORKSHOP'),
           ),
-          if (_msg != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_msg!, style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.approvalGreen)),
-            ),
           const SizedBox(height: 24),
 
           _section('WORKSHOP'),
@@ -144,8 +137,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(k, style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.gunmetal)),
-            Text(v, style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.machine, fontWeight: FontWeight.bold)),
+            Flexible(
+              child: Text(v,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.machine, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
       );
+}
+
+// Clear state block (B4): active with key suffix, or "no key — templates only".
+class _NarrationStatusBlock extends StatelessWidget {
+  final bool active;
+  final String? last4;
+  const _NarrationStatusBlock({required this.active, required this.last4});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active ? Werkz.approvalGreen : Werkz.steel;
+    final text = active
+        ? '● NARRATION ACTIVE${last4 != null ? ' — key ending …$last4' : ''}'
+        : '○ No key — templates only';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(border: Border.all(color: color), color: Werkz.carbon),
+      child: Text(text,
+          style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+    );
+  }
 }

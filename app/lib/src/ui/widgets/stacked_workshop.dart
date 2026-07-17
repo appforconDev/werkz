@@ -20,10 +20,20 @@ class StackedWorkshop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The building is full-bleed (fills behind the status bar), but the ROOM
+    // LABEL chips must clear the iOS status bar — inset the top room's chip.
+    final topInset = MediaQuery.of(context).padding.top;
     return Column(
       children: [
-        for (final (room, asset, label) in _order)
-          Expanded(child: _RoomPanel(asset: asset, label: label, active: room == activeRoom)),
+        for (var i = 0; i < _order.length; i++)
+          Expanded(
+            child: _RoomPanel(
+              asset: _order[i].$2,
+              label: _order[i].$3,
+              active: _order[i].$1 == activeRoom,
+              chipTopInset: i == 0 ? topInset + 6 : 6,
+            ),
+          ),
       ],
     );
   }
@@ -33,7 +43,8 @@ class _RoomPanel extends StatelessWidget {
   final String asset;
   final String label;
   final bool active;
-  const _RoomPanel({required this.asset, required this.label, required this.active});
+  final double chipTopInset;
+  const _RoomPanel({required this.asset, required this.label, required this.active, required this.chipTopInset});
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +62,7 @@ class _RoomPanel extends StatelessWidget {
             const IgnorePointer(child: ColoredBox(color: Color(0x22000000))),
           Positioned(
             left: 8,
-            top: 6,
+            top: chipTopInset,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               color: (active ? Werkz.approvalGreen : Werkz.machine).withValues(alpha: 0.8),

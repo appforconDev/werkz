@@ -14,7 +14,7 @@ test('key store: set / status / persist / clear', () => {
   const path = join(dir, 'narration-key');
   const s = new NarrationKeyStore(path);
   assert.equal(s.hasKey(), false);
-  assert.deepEqual(s.status(), { present: false, updatedAt: null });
+  assert.deepEqual(s.status(), { present: false, updatedAt: null, last4: null });
 
   s.setKey('sk-ant-test', '2026-07-17T00:00:00.000Z');
   assert.equal(s.hasKey(), true);

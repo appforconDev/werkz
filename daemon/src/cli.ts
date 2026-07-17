@@ -23,6 +23,7 @@ import { deriveProjectIdentity } from './adapter/cc/project.ts';
 import { buildEvent } from './adapter/cc/index.ts';
 import { NarrationKeyStore } from './narration/key-store.ts';
 import { NarrationEngine } from './narration/engine.ts';
+import { WorkOrderManager } from './work/work-order.ts';
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith('--') ? args[0] : 'start';
@@ -84,6 +85,7 @@ const service = new DecisionService(defaultConfig, bus, trust, pendingPath);
 const pairing = new PairingManager(pinnedToken, sessionsPath);
 const narrationKeys = new NarrationKeyStore(join(stateDir, 'narration-key'));
 new NarrationEngine(bus, narrationKeys); // fire-and-forget Haiku narration when a key is set
+const workOrders = new WorkOrderManager(projectDir, identity.projectId, bus, (m) => console.log(`  · ${m}`));
 
 function persistPairingToken(): void {
   try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken); } catch { /* best effort */ }
@@ -108,6 +110,7 @@ const server = createDaemonServer({
     sessionId: 'building', projectId: identity.projectId, workerId: null,
     eventType: 'key.accepted', severity: 'info', payload: { room: 'advisors-office' },
   })),
+  onWorkOrder: (directive) => workOrders.dispatch(directive),
   log: (m) => console.log(`  · ${m}`),
 });
 const ws = attachWsServer(server, { bus, service, pairing });

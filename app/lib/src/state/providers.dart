@@ -73,6 +73,7 @@ class WorkshopState {
   // eventId → real Haiku narration line (replaces the local template when present).
   final Map<String, String> narration;
   final bool narrationActive; // daemon confirms a BYOK key is set
+  final String? narrationLast4;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -82,6 +83,7 @@ class WorkshopState {
     this.permissionMode,
     this.narration = const {},
     this.narrationActive = false,
+    this.narrationLast4,
   });
 
   WorkshopState copyWith({
@@ -92,6 +94,7 @@ class WorkshopState {
     String? permissionMode,
     Map<String, String>? narration,
     bool? narrationActive,
+    String? narrationLast4,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -101,6 +104,7 @@ class WorkshopState {
         permissionMode: permissionMode ?? this.permissionMode,
         narration: narration ?? this.narration,
         narrationActive: narrationActive ?? this.narrationActive,
+        narrationLast4: narrationLast4 ?? this.narrationLast4,
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -227,14 +231,14 @@ class WorkshopController extends Notifier<WorkshopState> {
     if (c == null) return false;
     final ok = await c.setNarrationKey(key);
     if (ok && !_disposed) {
-      final present = await c.narrationKeyPresent();
-      if (!_disposed) state = state.copyWith(narrationActive: present);
+      final (present, last4) = await c.narrationKeyStatus();
+      if (!_disposed) state = state.copyWith(narrationActive: present, narrationLast4: last4);
     }
     return ok;
   }
 
   /// On (re)connect: resend a locally-queued key (retry), then refresh the
-  /// "narration active" chip from the daemon's authoritative status.
+  /// narration status (active + key suffix) from the daemon's authority.
   Future<void> _syncNarration() async {
     final c = _client;
     if (c == null) return;
@@ -242,8 +246,15 @@ class WorkshopController extends Notifier<WorkshopState> {
     if (stored != null && stored.isNotEmpty) {
       await c.setNarrationKey(stored);
     }
-    final present = await c.narrationKeyPresent();
-    if (!_disposed) state = state.copyWith(narrationActive: present);
+    final (present, last4) = await c.narrationKeyStatus();
+    if (!_disposed) state = state.copyWith(narrationActive: present, narrationLast4: last4);
+  }
+
+  /// File a work order (one directive → one headless job). Returns (ok, error?).
+  Future<(bool, String?)> fileWorkOrder(String directive) async {
+    final c = _client;
+    if (c == null) return (false, 'not connected');
+    return c.fileWorkOrder(directive);
   }
 }
 

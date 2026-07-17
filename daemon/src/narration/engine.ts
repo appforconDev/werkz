@@ -22,7 +22,9 @@ const NARRATABLE = new Set([
   'decision.denied',
   'session.started',
   'test.workshop.fire',
-  'key.accepted', // proof-of-life: first narrated line the moment a key is set
+  'key.accepted',       // proof-of-life: first narrated line the moment a key is set
+  'worker.dispatched',  // a work order was filed
+  'job.completed',      // the dispatched job finished
 ]);
 
 export class NarrationEngine {

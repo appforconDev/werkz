@@ -9,6 +9,7 @@ import { dirname } from 'node:path';
 export interface KeyStatus {
   present: boolean;
   updatedAt: string | null;
+  last4: string | null; // last 4 chars for a "key ending …XXXX" display; never the whole key
 }
 
 export class NarrationKeyStore {
@@ -56,6 +57,10 @@ export class NarrationKeyStore {
   }
 
   status(): KeyStatus {
-    return { present: this.#key !== null, updatedAt: this.#updatedAt };
+    return {
+      present: this.#key !== null,
+      updatedAt: this.#updatedAt,
+      last4: this.#key && this.#key.length >= 4 ? this.#key.slice(-4) : null,
+    };
   }
 }

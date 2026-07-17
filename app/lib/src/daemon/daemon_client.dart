@@ -64,16 +64,33 @@ class DaemonClient {
     }
   }
 
-  Future<bool> narrationKeyPresent() async {
+  /// Narration key status: (present, last4). last4 is a display suffix only.
+  Future<(bool, String?)> narrationKeyStatus() async {
     try {
       final res = await http.get(
         Uri.parse('${payload.httpBase}/narration-key/status'),
         headers: _authHeaders,
       );
-      if (res.statusCode != 200) return false;
-      return (jsonDecode(res.body) as Map<String, dynamic>)['present'] == true;
+      if (res.statusCode != 200) return (false, null);
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      return (j['present'] == true, j['last4'] as String?);
     } catch (_) {
-      return false;
+      return (false, null);
+    }
+  }
+
+  /// File a work order — one directive → one headless job. Returns (ok, error?).
+  Future<(bool, String?)> fileWorkOrder(String directive) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${payload.httpBase}/work-order'),
+        headers: _authHeaders,
+        body: jsonEncode({'directive': directive}),
+      );
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      return (res.statusCode == 200, j['error'] as String?);
+    } catch (_) {
+      return (false, 'workshop offline');
     }
   }
 
