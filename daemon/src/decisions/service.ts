@@ -38,6 +38,14 @@ export interface HandleResult {
   deduped?: boolean;
 }
 
+// Liveness of the CC hook connection holding a decision open (task 17 A). The
+// http layer wires this to the request socket; a decision whose socket is gone
+// can never be answered and must be superseded, not left as a zombie.
+export interface HoldConnection {
+  onClose(cb: () => void): void;
+  isClosed(): boolean;
+}
+
 // View of a pending decision for the app. Categories/counts are game-safe;
 // `diffCore` is device-zone only (§4.3) — shown in the overlay, never
 // persisted to disk, never shared.
@@ -73,6 +81,8 @@ export class DecisionService {
   #lastActivity = new Map<string, number>(); // internal sessionId → ms of last interactive signal
   // Game-safe summaries of open decisions, for the phone to GET /pending.
   #pendingSummaries = new Map<string, PendingSummary>();
+  // decisionId → the hook connection holding it (when opened via http).
+  #connections = new Map<string, HoldConnection>();
   #pendingStatePath: string | null;
   #lastPermissionMode: string | null = null;
 
@@ -124,12 +134,53 @@ export class DecisionService {
     return this.#pending.size;
   }
 
+  /**
+   * Only decisions with a LIVE held connection (task 17 A3). A summary whose
+   * hold is gone, or whose hook socket has closed, is a zombie — it is
+   * superseded on sight and never reaches a snapshot. Holds opened without
+   * connection info (direct calls in tests) count as live while held.
+   */
   listPending(): PendingSummary[] {
-    return [...this.#pendingSummaries.values()];
+    const live: PendingSummary[] = [];
+    for (const s of this.#pendingSummaries.values()) {
+      if (!this.#pending.has(s.decisionId)) continue; // settling — not live
+      const conn = this.#connections.get(s.decisionId);
+      if (conn?.isClosed()) {
+        this.supersede(s.decisionId, 'session-ended'); // missed close event
+        continue;
+      }
+      live.push(s);
+    }
+    return live;
   }
 
   release(decisionId: string, decision: 'allow' | 'deny'): boolean {
     return this.#pending.release(decisionId, decision);
+  }
+
+  /** Supersede an open hold early (session died, TTL sweep). */
+  supersede(decisionId: string, reason: string): boolean {
+    return this.#pending.supersede(decisionId, reason);
+  }
+
+  /**
+   * TTL sweep (task 17 A2), run on a timer — not just at boot. Supersedes any
+   * open hold whose hook socket has closed (missed close event), and any hold
+   * older than the pending TTL: no legitimate ceiling reaches that age, so it
+   * is a zombie by definition. Returns the number superseded.
+   */
+  sweepStale(now: number = Date.now()): number {
+    const ttlMs = this.#config.pendingTtlHours * 3_600_000;
+    let n = 0;
+    for (const h of [...this.#pending.handles()]) {
+      const conn = this.#connections.get(h.decisionId);
+      if (conn?.isClosed()) {
+        if (this.supersede(h.decisionId, 'session-ended')) n++;
+      } else if (now - h.openedAt > ttlMs) {
+        if (this.supersede(h.decisionId, 'stale-ttl')) n++;
+      }
+    }
+    return n;
   }
 
   /** Dev/testing + P2 calibration: seed a worker's trust directly. */
@@ -172,8 +223,17 @@ export class DecisionService {
     return atKeyboard ? this.#config.keyboardHoldSeconds : this.#config.awayHoldSeconds;
   }
 
-  /** Non-decision replies synchronously; decision replies await the phone. */
-  async handlePreToolUse(payload: CcHookPayload, now: number = Date.now()): Promise<HandleResult> {
+  /**
+   * Non-decision replies synchronously; decision replies await the phone.
+   * `connection` (when opened via http) is the CC hook socket: if it closes
+   * mid-hold the session is dead and the decision is superseded IMMEDIATELY
+   * (task 17 A1) — never left for restart recovery to find.
+   */
+  async handlePreToolUse(
+    payload: CcHookPayload,
+    now: number = Date.now(),
+    connection?: HoldConnection,
+  ): Promise<HandleResult> {
     const t0 = performance.now();
     if (typeof payload.permission_mode === 'string' && payload.permission_mode !== this.#lastPermissionMode) {
       this.#lastPermissionMode = payload.permission_mode;
@@ -247,11 +307,17 @@ export class DecisionService {
     this.#persistPending();
     const ceiling = this.#holdCeilingSeconds(ctx.sessionId, now);
     const handle = this.#pending.open(decisionId, key, ceiling, now);
+    if (connection) {
+      this.#connections.set(decisionId, connection);
+      connection.onClose(() => this.supersede(decisionId, 'session-ended'));
+    }
     const outcome = await handle.promise;
     this.#pendingSummaries.delete(decisionId);
+    this.#connections.delete(decisionId);
     this.#persistPending();
 
-    if (outcome === 'superseded') {
+    if (typeof outcome !== 'string') {
+      // decisionId rides the event so the app can drop exactly this requisition.
       this.#bus.emit(
         buildEvent({
           sessionId: ctx.sessionId,
@@ -259,10 +325,10 @@ export class DecisionService {
           workerId: ctx.workerId,
           eventType: 'decision.superseded',
           severity: 'info',
-          payload: { decisionClass: cls.decisionClass, ceilingSeconds: ceiling },
+          payload: { decisionId, decisionClass: cls.decisionClass, reason: outcome.superseded, ceilingSeconds: ceiling },
         }),
       );
-      return { response: reply('ask', 'hold ceiling reached — superseded'), routingLatencyMs, route: r, decisionId };
+      return { response: reply('ask', `superseded: ${outcome.superseded}`), routingLatencyMs, route: r, decisionId };
     }
 
     this.#dedup.record(key, outcome, Date.now());
@@ -273,7 +339,7 @@ export class DecisionService {
         workerId: ctx.workerId,
         eventType: outcome === 'allow' ? 'decision.approved' : 'decision.denied',
         severity: 'info',
-        payload: { decisionClass: cls.decisionClass },
+        payload: { decisionId, decisionClass: cls.decisionClass },
       }),
     );
     return { response: reply(outcome, `phone released: ${outcome}`), routingLatencyMs, route: r, decisionId };

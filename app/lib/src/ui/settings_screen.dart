@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../build_info.dart';
 import '../daemon/daemon_client.dart';
+import '../state/layout_tuning.dart';
 import '../state/providers.dart';
 import 'theme.dart';
 import 'first_run_screen.dart';
@@ -61,8 +64,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: Werkz.machine,
         foregroundColor: Werkz.cream,
-        title: const Text('WORKSHOP OFFICE',
-            style: TextStyle(fontFamily: Werkz.mono, letterSpacing: 3, fontSize: 15)),
+        // Long-press opens the debug LAYOUT TUNING panel over the home screen
+        // (task 17 C) — debug builds only, invisible otherwise.
+        title: GestureDetector(
+          onLongPress: kDebugMode
+              ? () {
+                  ref.read(layoutTuningPanelVisibleProvider.notifier).show();
+                  Navigator.of(context).pop();
+                }
+              : null,
+          child: const Text('WORKSHOP OFFICE',
+              style: TextStyle(fontFamily: Werkz.mono, letterSpacing: 3, fontSize: 15)),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -133,6 +146,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             },
             child: const Text('UNPAIR THIS PHONE', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.stampRed)),
           ),
+          const SizedBox(height: 16),
+
+          // Build stamp (task 17 B): every device report starts from a known
+          // build. UNSTAMPED means the build skipped tool/device-run.sh.
+          _section('BUILD'),
+          _row('App build', werkzBuildStamp),
+          _row('Mode', kReleaseMode ? 'release' : (kProfileMode ? 'profile' : 'debug')),
         ],
       ),
     );

@@ -10,6 +10,9 @@ export interface DaemonConfig {
   terminalActivityWindowMinutes: number;
   decisionDedupWindowSeconds: number; // §3.6
   routingLatencyBudgetMs: number;     // §3.5 HARD RULE
+  // Task 17 A2: any pending decision older than this is a zombie — no
+  // legitimate hold ceiling reaches it (away ceiling is 2h). Swept on a timer.
+  pendingTtlHours: number;
 }
 
 export const defaultConfig: DaemonConfig = {
@@ -20,4 +23,5 @@ export const defaultConfig: DaemonConfig = {
   terminalActivityWindowMinutes: 5,
   decisionDedupWindowSeconds: 120,
   routingLatencyBudgetMs: 50,
+  pendingTtlHours: 3,
 };

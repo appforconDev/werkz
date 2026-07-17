@@ -73,7 +73,18 @@ export function createDaemonServer({
     // --- CC-facing (localhost, no session token) ---
     if (req.method === 'POST' && path === '/pretooluse') {
       const payload = safeParse(await readBody(req));
-      const result = await service.handlePreToolUse(payload);
+      // The hook connection IS the CC session's lifeline: if this socket closes
+      // before we've replied, the session died and the held decision can never
+      // be answered — supersede it immediately (task 17 A1).
+      const connection = {
+        onClose: (cb: () => void) => {
+          res.on('close', () => {
+            if (!res.writableEnded) cb();
+          });
+        },
+        isClosed: () => !res.writableEnded && (res.socket === null || res.socket.destroyed),
+      };
+      const result = await service.handlePreToolUse(payload, Date.now(), connection);
       if (result.route.action !== 'hold') {
         const over = result.routingLatencyMs > 50 ? ' ⚠OVER-BUDGET' : '';
         console.log(`route ${result.route.decisionClass}/${result.route.action} in ${result.routingLatencyMs.toFixed(2)}ms${over}`);

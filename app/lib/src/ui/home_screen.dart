@@ -1,14 +1,17 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../daemon/daemon_client.dart';
 import '../models/werkz_event.dart';
 import '../models/preflight.dart';
 import '../state/providers.dart';
+import '../state/layout_tuning.dart';
 import '../state/narration.dart';
 import 'theme.dart';
 import 'settings_screen.dart';
 import 'work_order_sheet.dart';
+import 'widgets/layout_tuning_panel.dart';
 import 'widgets/requisition_overlay.dart';
 import 'widgets/stacked_workshop.dart';
 
@@ -80,9 +83,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final unread = ws.feed.isNotEmpty && ws.feed.last.eventId != _lastSeenEventId;
 
-    // Bottom bar total height (content + home-indicator inset + top border) so
-    // the floating work-order strip can sit just above it.
-    final barHeight = 42 + MediaQuery.of(context).viewPadding.bottom + 2;
+    // Contested layout constants are LIVE-tunable in debug builds (task 17 C);
+    // the defaults are the shipped values.
+    final tuning = ref.watch(layoutTuningProvider);
+    final tuningVisible = kDebugMode && ref.watch(layoutTuningPanelVisibleProvider);
+
+    // Bottom bar total height (content + pad + home-indicator inset + top
+    // border) so the floating work-order strip can sit just above it.
+    final barHeight = tuning.bottomBarHeight + tuning.bottomBarPad + MediaQuery.of(context).viewPadding.bottom + 2;
 
     // Start the auto-dismiss countdown when a work order reaches COMPLETED.
     ref.listen<WorkshopState>(workshopProvider, (prev, next) {
@@ -112,6 +120,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
+          // Debug layout tuning floats over the rooms so the values move LIVE
+          // in front of you (task 17 C).
+          if (tuningVisible)
+            Positioned(left: 0, right: 0, bottom: barHeight, child: const LayoutTuningPanel()),
           // Work-order status floats ABOVE the bottom bar as an overlay — it must
           // never reflow the room stack when appearing/dismissing (task 16 B2).
           if (ws.workOrder.phase != WorkOrderPhase.idle)
@@ -143,14 +155,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 // The 1955 steel bottom bar (task 15 A) — the app's chrome and sole access point
 // for LOG + DISPATCH. Stenciled labels, subtle corner rivets. Expansion-ready:
 // a third slot is reserved for the OCTAGON tab in P4.
-class _BottomBar extends StatelessWidget {
+class _BottomBar extends ConsumerWidget {
   final bool unread;
   final VoidCallback onLog;
   final VoidCallback onDispatch;
   const _BottomBar({required this.unread, required this.onLog, required this.onDispatch});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tuning = ref.watch(layoutTuningProvider);
     return Container(
       decoration: const BoxDecoration(
         color: Werkz.machine,
@@ -159,27 +172,30 @@ class _BottomBar extends StatelessWidget {
       ),
       // SafeArea adds ONLY the home-indicator inset; the content box hugs the
       // labels so there's no dead steel under them (task 16 A4 — height = content
-      // + bottom inset, no double padding).
+      // + bottom inset, no double padding). Height/pad are tunable (task 17 C).
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          height: 42,
-          child: Stack(
-            children: [
-              // Subtle rivets in the bar corners.
-              const Positioned(left: 6, top: 5, child: _Rivet()),
-              const Positioned(right: 6, top: 5, child: _Rivet()),
-              const Positioned(left: 6, bottom: 5, child: _Rivet()),
-              const Positioned(right: 6, bottom: 5, child: _Rivet()),
-              Row(
-                children: [
-                  Expanded(child: _BarTab(icon: Icons.receipt_long, label: 'LOG', onTap: onLog, badge: unread)),
-                  Container(width: 2, height: 30, color: Werkz.gunmetal),
-                  Expanded(child: _BarTab(icon: Icons.assignment, label: 'DISPATCH', onTap: onDispatch)),
-                  // P4: reserve a third slot here for the OCTAGON tab.
-                ],
-              ),
-            ],
+        child: Padding(
+          padding: EdgeInsets.only(bottom: tuning.bottomBarPad),
+          child: SizedBox(
+            height: tuning.bottomBarHeight,
+            child: Stack(
+              children: [
+                // Subtle rivets in the bar corners.
+                const Positioned(left: 6, top: 5, child: _Rivet()),
+                const Positioned(right: 6, top: 5, child: _Rivet()),
+                const Positioned(left: 6, bottom: 5, child: _Rivet()),
+                const Positioned(right: 6, bottom: 5, child: _Rivet()),
+                Row(
+                  children: [
+                    Expanded(child: _BarTab(icon: Icons.receipt_long, label: 'LOG', onTap: onLog, badge: unread)),
+                    Container(width: 2, height: 30, color: Werkz.gunmetal),
+                    Expanded(child: _BarTab(icon: Icons.assignment, label: 'DISPATCH', onTap: onDispatch)),
+                    // P4: reserve a third slot here for the OCTAGON tab.
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -335,6 +351,7 @@ class _StatusBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final tuning = ref.watch(layoutTuningProvider);
     final (label, color) = ws.unreachable
         ? ('WORKSHOP UNREACHABLE', Werkz.stampRed)
         : switch (ws.conn) {
@@ -347,7 +364,8 @@ class _StatusBar extends ConsumerWidget {
       child: Container(
         color: Werkz.machine,
         // Tight to the iOS status bar — the notch inset above is our chrome too.
-        padding: const EdgeInsets.fromLTRB(14, 3, 14, 7),
+        // Top gap is tunable (task 17 C).
+        padding: EdgeInsets.fromLTRB(14, tuning.appBarTopGap, 14, 7),
         child: Row(
           children: [
             const Text('WERKZ', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontWeight: FontWeight.w900, letterSpacing: 2)),

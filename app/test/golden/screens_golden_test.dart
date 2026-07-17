@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:werkz_app/src/state/layout_tuning.dart';
 import 'package:werkz_app/src/state/providers.dart';
 import 'package:werkz_app/src/daemon/daemon_client.dart' show ConnState;
 import 'package:werkz_app/src/models/pending_decision.dart';
@@ -139,4 +140,24 @@ void main() {
   testWidgets('settings', (t) async {
     await pumpGolden(t, name: 'settings', app: _screen(const SettingsScreen()));
   });
+
+  // Debug LAYOUT TUNING panel over the home screen (task 17 C) — opened via
+  // long-press on the Settings title; here forced visible via its provider.
+  testWidgets('home_layout_tuning', (t) async {
+    await pumpGolden(t, name: 'home_layout_tuning',
+        app: ProviderScope(
+          overrides: [
+            secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
+            daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+            workshopProvider.overrideWith(() => _SeededWorkshop(const WorkshopState(conn: ConnState.connected))),
+            layoutTuningPanelVisibleProvider.overrideWith(_VisiblePanel.new),
+          ],
+          child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const HomeScreen()),
+        ));
+  });
+}
+
+class _VisiblePanel extends LayoutTuningPanelController {
+  @override
+  bool build() => true;
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../state/layout_tuning.dart';
 import '../theme.dart';
 
 // Interim stacked building (pre-Flame). Building order is CANON:
@@ -10,41 +12,43 @@ import '../theme.dart';
 // slab. Floor-name chips overlay each room's top-left corner. Rooms fill the
 // slab via BoxFit.cover (frame gone → no logo to crop). Inactive rooms dim.
 // Ambient workers/sprites arrive with the Flame layer (P2 slice 2).
-class StackedWorkshop extends StatelessWidget {
+//
+// Seam heights and per-room cover alignments come from LayoutTuning (task 17 C):
+// defaults are the shipped constants, and the debug tuning panel moves them
+// live on device. At the iPhone-12 layout the panels are slightly
+// narrower-aspect than the 892×474 art, so cover crops HORIZONTALLY and the
+// full image height shows; the y-alignments only matter if a taller chrome
+// ever flips cover to a vertical crop.
+class StackedWorkshop extends ConsumerWidget {
   final String activeRoom;
   const StackedWorkshop({super.key, required this.activeRoom});
 
-  // Per-room cover alignment (task 16 A2). At the iPhone-12 layout the panels are
-  // slightly narrower-aspect than the 892×474 art, so BoxFit.cover crops
-  // HORIZONTALLY and the full image height shows — every storey's WERKZ signage
-  // (ceiling to floor) is visible. These y-biases only matter if a taller chrome
-  // ever flips cover to a vertical crop; they keep the PRIMARY sign centered then:
-  // advisor's desk W-plate, the workshop clock, the archive shelf plate.
-  static const _order = <(String room, String asset, String label, Alignment align)>[
-    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', Alignment(0, 0.15)),
-    ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', Alignment(0, 0.0)),
-    ('archive', 'assets/art/archive.png', 'ARCHIVE', Alignment(0, -0.2)),
-  ];
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(layoutTuningProvider);
+    final order = <(String room, String asset, String label, double alignY, double seamAbove)>[
+      ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.alignAdvisorY, 0),
+      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.alignWorkshopY, t.seamAdvisorFloor),
+      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.alignArchiveY, t.seamFloorArchive),
+    ];
+
     // Rooms sit below the status bar (HomeScreen lays them out that way), so no
     // safe-area inset is needed here — chips ride each room's top-left corner.
     return Container(
       color: Werkz.gunmetal,
       child: Column(
         children: [
-          for (var i = 0; i < _order.length; i++) ...[
-            // Explicit, IDENTICAL floor slab at every seam (task 15 C3): a steel
+          for (var i = 0; i < order.length; i++) ...[
+            // Explicit, IDENTICAL treatment at every seam (task 15 C3): a steel
             // bar with a lit top edge, so both floors read uniformly regardless
-            // of how dark the adjoining room art is.
-            if (i > 0) const _FloorSlab(),
+            // of how dark the adjoining room art is. Height is per-seam tunable.
+            if (i > 0) _FloorSlab(height: order[i].$5),
             Expanded(
               child: _RoomPanel(
-                asset: _order[i].$2,
-                label: _order[i].$3,
-                active: _order[i].$1 == activeRoom,
-                align: _order[i].$4,
+                asset: order[i].$2,
+                label: order[i].$3,
+                active: order[i].$1 == activeRoom,
+                align: Alignment(0, order[i].$4),
                 chipTopInset: 4,
               ),
             ),
@@ -55,14 +59,14 @@ class StackedWorkshop extends StatelessWidget {
   }
 }
 
-// A uniform steel floor slab between storeys. Same height + treatment at every
-// seam so the floors read consistently (task 15 C3).
+// A uniform steel floor slab between storeys (task 15 C3).
 class _FloorSlab extends StatelessWidget {
-  const _FloorSlab();
+  final double height;
+  const _FloorSlab({required this.height});
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 5,
+      height: height,
       decoration: const BoxDecoration(
         color: Werkz.gunmetal,
         border: Border(top: BorderSide(color: Werkz.steel, width: 1)),

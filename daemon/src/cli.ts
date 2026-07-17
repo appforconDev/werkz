@@ -8,7 +8,9 @@
 // Flags: --port <n> (default 47100), --events <path>, --project <dir> (default cwd).
 
 import { networkInterfaces } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { defaultConfig } from './config.ts';
 import { EventBus } from './events/bus.ts';
@@ -168,6 +170,29 @@ const ws = attachWsServer(server, { bus, service, pairing, getPreflight });
 const install = installHook(projectDir, port);
 const recovered = service.recoverPending(); // superseded any holds orphaned by a prior crash
 
+// TTL sweep (task 17 A2): zombie decisions are superseded on a TIMER, not just
+// at boot — a hold whose CC session died without a close event, or one older
+// than any legitimate ceiling, never survives to the next welcome snapshot.
+const sweeper = setInterval(() => {
+  const swept = service.sweepStale();
+  if (swept) console.log(`  · sweep: superseded ${swept} stale decision(s)`);
+}, 60_000);
+if (typeof sweeper.unref === 'function') sweeper.unref();
+
+// Build stamp (task 17 B): every device report starts from a known build. The
+// daemon's own git sha when run from a checkout; absent in an npm install.
+function daemonBuildSha(): string | null {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: dirname(fileURLToPath(import.meta.url)),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString().trim() || null;
+  } catch {
+    return null;
+  }
+}
+const buildSha = daemonBuildSha();
+
 // pid file so `werkz qr` (a separate process) can signal this daemon.
 const pidPath = join(stateDir, 'daemon.pid');
 try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pidPath, String(process.pid)); } catch { /* best effort */ }
@@ -194,7 +219,7 @@ server.listen(port, () => {
   preflight = runPreflight({ projectDir, configClaudePath: userConfig.claudePath, port, portBindable: true });
   workOrders.setClaudePath(preflight.claudePath);
 
-  console.log(`WERKZ INDUSTRIES — daemon v0.0.1 opening the workshop.`);
+  console.log(`WERKZ INDUSTRIES — daemon v0.0.1${buildSha ? ` (build ${buildSha})` : ''} opening the workshop.`);
   console.log(`  project:  ${projectDir}  (workshop ${identity.projectId}, by ${identity.source})`);
   console.log(`  hook:     ${install.changed ? 'installed into' : 'already present in'} ${install.path}`);
   console.log(`  ws:       ws://…:${port}/ws  (session-token auth)`);

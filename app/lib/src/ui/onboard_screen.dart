@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../build_info.dart';
 import 'theme.dart';
 import 'pairing_screen.dart';
 
@@ -14,7 +15,9 @@ class OnboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Werkz.cream,
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,6 +111,20 @@ class OnboardScreen extends StatelessWidget {
               ),
             ],
           ),
+            ),
+            // Build stamp, tiny in the corner (task 17 B) — every device report
+            // starts from a known build.
+            Positioned(
+              right: 6,
+              bottom: 2,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                color: Werkz.cream.withValues(alpha: 0.85),
+                child: const Text(werkzBuildStamp,
+                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 8, color: Werkz.steel)),
+              ),
+            ),
+          ],
         ),
       ),
     );
