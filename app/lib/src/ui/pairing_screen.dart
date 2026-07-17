@@ -7,6 +7,10 @@ import 'theme.dart';
 
 // First 60 seconds (GDD §7.1), app side: scan the QR the daemon prints, pair,
 // store the session token. Manual host:port + token fallback for emulators.
+//
+// The scanner controller is created fresh in initState and disposed in dispose,
+// so re-mounting after unpair (a brand-new State) always gets a live camera.
+// Every scan produces VISIBLE feedback — silent non-reaction is forbidden.
 class PairingScreen extends ConsumerStatefulWidget {
   const PairingScreen({super.key});
   @override
@@ -14,23 +18,54 @@ class PairingScreen extends ConsumerStatefulWidget {
 }
 
 class _PairingScreenState extends ConsumerState<PairingScreen> {
+  MobileScannerController? _scanner;
   bool _busy = false;
-  String? _error;
   bool _manual = false;
-  final _payloadCtrl = TextEditingController();
+  String? _status; // neutral/positive feedback
+  String? _error; // rejection feedback
+  String? _lastRaw; // de-dupe repeated frames of the same code
+
+  @override
+  void initState() {
+    super.initState();
+    _scanner = MobileScannerController();
+  }
+
+  @override
+  void dispose() {
+    _scanner?.dispose();
+    super.dispose();
+  }
 
   Future<void> _submit(PairingPayload p) async {
-    setState(() { _busy = true; _error = null; });
+    setState(() { _busy = true; _error = null; _status = 'Requisition read — pairing…'; });
     final err = await ref.read(pairingControllerProvider.notifier).pair(p);
-    if (mounted) setState(() { _busy = false; _error = err; });
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _error = err;
+        _status = err == null ? 'Paired. Opening the workshop…' : null;
+      });
+      if (err != null) _lastRaw = null; // allow a retry scan
+    }
   }
 
   void _onScan(BarcodeCapture cap) {
     if (_busy) return;
     final raw = cap.barcodes.firstOrNull?.rawValue;
-    if (raw == null) return;
+    if (raw == null || raw == _lastRaw) return;
+    _lastRaw = raw;
     final p = PairingPayload.tryDecode(raw);
-    if (p != null) _submit(p);
+    if (p != null) {
+      _submit(p);
+    } else {
+      // ANY scan gets feedback — never a silent non-reaction.
+      setState(() {
+        _status = null;
+        _error = 'Unreadable code — that is not a WERKZ pairing QR.';
+      });
+      _lastRaw = null;
+    }
   }
 
   @override
@@ -50,16 +85,10 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
                     style: TextStyle(fontFamily: Werkz.mono, fontSize: 10, color: Werkz.gunmetal, letterSpacing: 1)),
               ]),
             ),
-            Expanded(
-              child: _manual ? _manualEntry() : _scanner(),
-            ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(_error!, style: const TextStyle(color: Werkz.stampRed, fontFamily: Werkz.mono)),
-              ),
+            Expanded(child: _manual ? _manualEntry() : _scannerView()),
+            _feedback(),
             TextButton(
-              onPressed: () => setState(() => _manual = !_manual),
+              onPressed: () => setState(() { _manual = !_manual; _error = null; _status = null; }),
               child: Text(_manual ? 'USE CAMERA' : 'ENTER BY HAND (EMULATOR)',
                   style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.gunmetal)),
             ),
@@ -69,15 +98,38 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
     );
   }
 
-  Widget _scanner() {
+  Widget _feedback() {
+    if (_error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Icon(Icons.error_outline, color: Werkz.stampRed, size: 16),
+          const SizedBox(width: 6),
+          Flexible(child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Werkz.stampRed, fontFamily: Werkz.mono, fontSize: 12))),
+        ]),
+      );
+    }
+    if (_status != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Text(_status!, textAlign: TextAlign.center, style: const TextStyle(color: Werkz.approvalGreen, fontFamily: Werkz.mono, fontSize: 12)),
+      );
+    }
+    return const SizedBox(height: 12);
+  }
+
+  Widget _scannerView() {
+    final scanner = _scanner;
+    if (scanner == null) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(border: Border.all(color: Werkz.gunmetal, width: 3)),
-      child: MobileScanner(onDetect: _onScan),
+      child: MobileScanner(controller: scanner, onDetect: _onScan),
     );
   }
 
   Widget _manualEntry() {
+    final ctrl = TextEditingController();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -87,7 +139,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
               style: TextStyle(fontFamily: Werkz.mono, fontSize: 12)),
           const SizedBox(height: 8),
           TextField(
-            controller: _payloadCtrl,
+            controller: ctrl,
             maxLines: 4,
             style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11),
             decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'eyJ2IjoxLC…'),
@@ -97,9 +149,9 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
             onPressed: _busy
                 ? null
                 : () {
-                    final p = PairingPayload.tryDecode(_payloadCtrl.text);
+                    final p = PairingPayload.tryDecode(ctrl.text);
                     if (p == null) {
-                      setState(() => _error = 'Could not decode that payload.');
+                      setState(() { _status = null; _error = 'Could not decode that payload.'; });
                     } else {
                       _submit(p);
                     }

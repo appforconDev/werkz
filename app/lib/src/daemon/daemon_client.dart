@@ -77,6 +77,19 @@ class DaemonClient {
     }
   }
 
+  /// Revoke this phone's session on the daemon and make it reissue a fresh QR.
+  static Future<bool> revokeSession(PairingPayload payload, String sessionToken) async {
+    try {
+      final res = await http.post(
+        Uri.parse('${payload.httpBase}/unpair'),
+        headers: {'content-type': 'application/json', 'authorization': 'Bearer $sessionToken'},
+      );
+      return res.statusCode == 200;
+    } catch (_) {
+      return false; // daemon unreachable — local wipe still proceeds
+    }
+  }
+
   void connect() {
     _closed = false;
     _open();

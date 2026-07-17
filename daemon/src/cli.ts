@@ -3,12 +3,13 @@
 //
 //   npx werkz            detect project, start daemon, inject hook, print QR
 //   npx werkz uninstall  remove exactly the hook we added
+//   npx werkz qr         ask the running daemon to reissue a fresh pairing QR
 //
 // Flags: --port <n> (default 47100), --events <path>, --project <dir> (default cwd).
 
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { defaultConfig } from './config.ts';
 import { EventBus } from './events/bus.ts';
 import { DecisionService } from './decisions/service.ts';
@@ -19,6 +20,7 @@ import { printPairing } from './pairing/qr.ts';
 import { advertise } from './net/mdns.ts';
 import { installHook, uninstallHook } from './install/hooks.ts';
 import { deriveProjectIdentity } from './adapter/cc/project.ts';
+import { buildEvent } from './adapter/cc/index.ts';
 import { NarrationKeyStore } from './narration/key-store.ts';
 import { NarrationEngine } from './narration/engine.ts';
 
@@ -48,6 +50,21 @@ if (command === 'uninstall') {
   process.exit(0);
 }
 
+if (command === 'qr') {
+  // Signal the running daemon to reissue a fresh one-time pairing token and
+  // reprint the QR (SIGUSR2). Lets a phone re-pair after unpair without a restart.
+  const pidPath = join(flag('--state', join(projectDir, '.werkz'))!, 'daemon.pid');
+  try {
+    const pid = Number(readFileSync(pidPath, 'utf8').trim());
+    process.kill(pid, 'SIGUSR2');
+    console.log('WERKZ: asked the workshop for a fresh pairing QR — check the daemon terminal.');
+  } catch {
+    console.error('WERKZ: no running daemon found for this project (is `npx werkz` running here?).');
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
 // start
 const identity = deriveProjectIdentity(projectDir);
 const stateDir = flag('--state', join(projectDir, '.werkz'))!;
@@ -67,17 +84,43 @@ const service = new DecisionService(defaultConfig, bus, trust, pendingPath);
 const pairing = new PairingManager(pinnedToken, sessionsPath);
 const narrationKeys = new NarrationKeyStore(join(stateDir, 'narration-key'));
 new NarrationEngine(bus, narrationKeys); // fire-and-forget Haiku narration when a key is set
-if (!pinnedToken) {
-  // Persist the freshly generated token so a restart advertises the same QR.
+
+function persistPairingToken(): void {
   try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken); } catch { /* best effort */ }
 }
-const server = createDaemonServer({ service, pairing, narrationKeys, devMode });
+if (!pinnedToken) persistPairingToken();
+
+// Reprint the QR after a fresh token is issued (unpair or `werkz qr`).
+function reissuePairing(): void {
+  persistPairingToken();
+  console.log('\nWERKZ: fresh pairing requisition issued.');
+  printPairing(pairing.payload(lanHost(), port));
+}
+
+const server = createDaemonServer({
+  service,
+  pairing,
+  narrationKeys,
+  devMode,
+  onReissuePairing: reissuePairing,
+  // Proof-of-life: narrate a key.accepted line the moment a key is set.
+  onKeyAccepted: () => bus.emit(buildEvent({
+    sessionId: 'building', projectId: identity.projectId, workerId: null,
+    eventType: 'key.accepted', severity: 'info', payload: { room: 'advisors-office' },
+  })),
+  log: (m) => console.log(`  · ${m}`),
+});
 const ws = attachWsServer(server, { bus, service, pairing });
 
 const install = installHook(projectDir, port);
 const recovered = service.recoverPending(); // superseded any holds orphaned by a prior crash
 
-process.on('SIGINT', () => { ws.close(); server.close(); process.exit(0); });
+// pid file so `werkz qr` (a separate process) can signal this daemon.
+const pidPath = join(stateDir, 'daemon.pid');
+try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pidPath, String(process.pid)); } catch { /* best effort */ }
+
+process.on('SIGUSR2', () => { pairing.resetPairing(); reissuePairing(); });
+process.on('SIGINT', () => { ws.close(); server.close(); try { if (existsSync(pidPath)) writeFileSync(pidPath, ''); } catch { /* ignore */ } process.exit(0); });
 
 server.listen(port, () => {
   console.log(`WERKZ INDUSTRIES — daemon v0.0.1 opening the workshop.`);

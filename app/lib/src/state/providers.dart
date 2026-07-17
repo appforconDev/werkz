@@ -52,6 +52,12 @@ class PairingController extends AsyncNotifier<StoredPairing?> {
   }
 
   Future<void> unpair() async {
+    // (a) tell the daemon to revoke this session and reissue a fresh QR,
+    // (b) wipe stored token + key. Root then rebuilds a FRESH PairingScreen.
+    final current = state.asData?.value;
+    if (current != null) {
+      await DaemonClient.revokeSession(current.payload, current.sessionToken);
+    }
     await _s.deleteAll();
     state = const AsyncData(null);
   }
@@ -66,6 +72,7 @@ class WorkshopState {
   final String? permissionMode;
   // eventId → real Haiku narration line (replaces the local template when present).
   final Map<String, String> narration;
+  final bool narrationActive; // daemon confirms a BYOK key is set
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -74,6 +81,7 @@ class WorkshopState {
     this.autopilot = false,
     this.permissionMode,
     this.narration = const {},
+    this.narrationActive = false,
   });
 
   WorkshopState copyWith({
@@ -83,6 +91,7 @@ class WorkshopState {
     bool? autopilot,
     String? permissionMode,
     Map<String, String>? narration,
+    bool? narrationActive,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -91,6 +100,7 @@ class WorkshopState {
         autopilot: autopilot ?? this.autopilot,
         permissionMode: permissionMode ?? this.permissionMode,
         narration: narration ?? this.narration,
+        narrationActive: narrationActive ?? this.narrationActive,
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -144,7 +154,9 @@ class WorkshopController extends Notifier<WorkshopState> {
       if (!_disposed) state = state.copyWith(conn: c);
     };
     client.onWelcome = (pending, autopilot, mode) {
-      if (!_disposed) state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode);
+      if (_disposed) return;
+      state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode);
+      _syncNarration(); // retry a queued key + refresh the "narration active" chip
     };
     client.onEvent = (e) {
       if (!_disposed) _handleEvent(e);
@@ -208,10 +220,30 @@ class WorkshopController extends Notifier<WorkshopState> {
   }
 
   /// Send the BYOK narration key to the daemon (settings / first-run card 3).
+  /// Returns true when the daemon confirmed. On failure the key is still stored
+  /// locally by the caller and re-sent on the next connect (_syncNarration).
   Future<bool> setNarrationKey(String key) async {
     final c = _client;
     if (c == null) return false;
-    return c.setNarrationKey(key);
+    final ok = await c.setNarrationKey(key);
+    if (ok && !_disposed) {
+      final present = await c.narrationKeyPresent();
+      if (!_disposed) state = state.copyWith(narrationActive: present);
+    }
+    return ok;
+  }
+
+  /// On (re)connect: resend a locally-queued key (retry), then refresh the
+  /// "narration active" chip from the daemon's authoritative status.
+  Future<void> _syncNarration() async {
+    final c = _client;
+    if (c == null) return;
+    final stored = await ref.read(secureStorageProvider).read(key: 'werkz.narrationKey');
+    if (stored != null && stored.isNotEmpty) {
+      await c.setNarrationKey(stored);
+    }
+    final present = await c.narrationKeyPresent();
+    if (!_disposed) state = state.copyWith(narrationActive: present);
   }
 }
 

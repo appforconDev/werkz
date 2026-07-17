@@ -37,9 +37,14 @@ export interface ServerDeps {
   pairing: PairingManager;
   narrationKeys: NarrationKeyStore;
   devMode: boolean;
+  onReissuePairing?: () => void; // reprint the QR after a fresh token is issued
+  onKeyAccepted?: () => void;    // emit key.accepted (proof-of-life narration)
+  log?: (msg: string) => void;
 }
 
-export function createDaemonServer({ service, pairing, narrationKeys, devMode }: ServerDeps): Server {
+export function createDaemonServer({
+  service, pairing, narrationKeys, devMode, onReissuePairing, onKeyAccepted, log = () => {},
+}: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const path = url.pathname;
@@ -53,9 +58,13 @@ export function createDaemonServer({ service, pairing, narrationKeys, devMode }:
     if (req.method === 'POST' && path === '/pair') {
       const body = safeParse(await readBody(req));
       const sessionToken = pairing.pair(typeof body.token === 'string' ? body.token : '');
-      return sessionToken
-        ? json(res, 200, { sessionToken })
-        : json(res, 401, { error: 'invalid or already-used pairing token' });
+      if (sessionToken) {
+        log('pair: accepted a new phone');
+        return json(res, 200, { sessionToken });
+      }
+      const reason = pairing.lastRejectReason ?? 'invalid pairing token';
+      log(`pair: REJECTED — ${reason}`);
+      return json(res, 401, { error: reason });
     }
 
     // --- CC-facing (localhost, no session token) ---
@@ -87,9 +96,20 @@ export function createDaemonServer({ service, pairing, narrationKeys, devMode }:
     }
 
     // --- Phone-facing (require session token) ---
-    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status']);
+    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status', '/unpair']);
     if (phonePaths.has(path)) {
-      if (!pairing.verify(tokenFrom(req, url))) return json(res, 401, { error: 'unpaired — POST /pair first' });
+      const token = tokenFrom(req, url);
+      if (!pairing.verify(token)) return json(res, 401, { error: 'unpaired — POST /pair first' });
+
+      // Unpair: revoke this phone's session AND reissue a fresh pairing token so
+      // a phone (this one or another) can re-pair without a daemon restart.
+      if (req.method === 'POST' && path === '/unpair') {
+        pairing.revoke(token!);
+        pairing.resetPairing();
+        onReissuePairing?.();
+        log('unpair: session revoked, fresh pairing token issued');
+        return json(res, 200, { ok: true, reissued: true });
+      }
 
       if (req.method === 'GET' && path === '/pending') {
         return json(res, 200, { pending: service.listPending() });
@@ -107,8 +127,14 @@ export function createDaemonServer({ service, pairing, narrationKeys, devMode }:
       if (req.method === 'POST' && path === '/narration-key') {
         const body = safeParse(await readBody(req));
         const key = typeof body.key === 'string' ? body.key : '';
-        if (key.trim()) narrationKeys.setKey(key, new Date().toISOString());
-        else narrationKeys.clear();
+        if (key.trim()) {
+          narrationKeys.setKey(key, new Date().toISOString());
+          log('narration key set');
+          onKeyAccepted?.(); // proof-of-life: narrate a key.accepted line immediately
+        } else {
+          narrationKeys.clear();
+          log('narration key cleared');
+        }
         return json(res, 200, narrationKeys.status());
       }
       if (req.method === 'GET' && path === '/narration-key/status') {

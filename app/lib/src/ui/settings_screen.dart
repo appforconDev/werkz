@@ -25,14 +25,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _saveKey() async {
+    final key = _keyCtrl.text.trim();
     setState(() { _busy = true; _msg = null; });
-    final ok = await ref.read(workshopProvider.notifier).setNarrationKey(_keyCtrl.text.trim());
+    // Store locally first so we can retry on the next connect if the daemon is
+    // unreachable right now.
+    if (key.isEmpty) {
+      await ref.read(secureStorageProvider).delete(key: 'werkz.narrationKey');
+    } else {
+      await ref.read(secureStorageProvider).write(key: 'werkz.narrationKey', value: key);
+    }
+    final ok = await ref.read(workshopProvider.notifier).setNarrationKey(key);
     if (mounted) {
       setState(() {
         _busy = false;
         _msg = ok
-            ? (_keyCtrl.text.trim().isEmpty ? 'Key cleared — templates only.' : 'Key sent. Haiku narration is live.')
-            : 'Could not reach the daemon.';
+            ? (key.isEmpty ? 'Key cleared — templates only.' : 'Saved → daemon confirmed. Narration active.')
+            : 'Saved on device — the workshop is offline; will retry on reconnect.';
         if (ok) _keyCtrl.clear();
       });
     }
@@ -66,7 +74,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _row('Oversight', ws.autopilot ? 'AUTOPILOT (bypassed)' : 'manual'),
           const SizedBox(height: 24),
 
-          _section('NARRATION KEY (OPTIONAL)'),
+          Row(children: [
+            _section('NARRATION KEY (OPTIONAL)'),
+            const Spacer(),
+            if (ws.narrationActive)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(border: Border.all(color: Werkz.approvalGreen)),
+                child: const Text('● NARRATION ACTIVE',
+                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, color: Werkz.approvalGreen, fontWeight: FontWeight.bold)),
+              ),
+          ]),
+          const SizedBox(height: 6),
           const Text(
             'Your Anthropic (Haiku) API key powers narration. It is sent to your '
             'daemon and stays on that machine — never to us, never in git.',

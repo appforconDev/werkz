@@ -8,6 +8,7 @@ import 'theme.dart';
 import 'log_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/requisition_overlay.dart';
+import 'widgets/stacked_workshop.dart';
 
 // Ambient screen: approved workshop-floor backdrop (static, NO Flame yet) + a
 // dry-template event log strip. When a decision is pending, the requisition
@@ -24,7 +25,7 @@ class HomeScreen extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          _backdrop(),
+          StackedWorkshop(activeRoom: _activeRoom(ws)),
           Column(
             children: [
               SafeArea(bottom: false, child: _StatusBar(ws: ws)),
@@ -45,14 +46,16 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // Room crop fix (task 9 §3): letterbox the room art so the WERKZ wall logo is
-  // never cut in half. BoxFit.contain fits the whole frame; oil-gray fills the
-  // letterbox bars. The real stacked-building view lands with the Flame layer.
-  Widget _backdrop() => Container(
-        color: Werkz.oil,
-        alignment: Alignment.topCenter,
-        child: Image.asset('assets/art/workshop-floor.png', fit: BoxFit.contain),
-      );
+  // Which room glows: the pending decision's room, else the most recent event
+  // that named a room, else the workshop floor.
+  String _activeRoom(WorkshopState ws) {
+    if (ws.topDecision != null) return ws.topDecision!.room;
+    for (final e in ws.feed.reversed) {
+      final room = e.payload['room'] as String?;
+      if (room != null) return room;
+    }
+    return 'workshop-floor';
+  }
 }
 
 class _StatusBar extends ConsumerWidget {

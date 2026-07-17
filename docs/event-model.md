@@ -85,6 +85,14 @@ active workshop and can switch.
 
 Legend: rooms = workshop-floor / test-workshop / archive / octagon / advisors-office / building.
 
+**Building layout (canon, decided 2026-07-17).** The vertical cross-section
+stacks, top → bottom: **advisors-office = penthouse** (fixed at the top),
+**workshop-floor = ground**, **archive = basement**. The app's interim
+(pre-Flame) view renders the three approved room images in this order,
+letterboxed so the WERKZ wall logo is never cropped, inactive rooms dimmed.
+Ambient workers/sprites are the Flame layer (P2 slice 2). test-workshop and
+octagon slot in as the building grows upward with progression (GDD §4.2).
+
 | CC source | Internal eventType | Game object / behavior | Room | Severity |
 |---|---|---|---|---|
 | `SessionStart` (matcher `startup`) | `session.started` | Workshop opens: lights on, workers walk in, punch clock stamps | building | info |
