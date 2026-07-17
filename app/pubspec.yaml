@@ -52,6 +52,17 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# App icon: steel-plate + centered vector W, composed in assets-pipeline (task 12,
+# part 7). Master 1024 lives at assets-pipeline/approved/app-icon/. Interim-official
+# until the designed pass in P4. Regenerate platform sizes: dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/werkz-icon-1024.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  min_sdk_android: 21
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

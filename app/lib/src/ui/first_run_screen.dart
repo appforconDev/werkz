@@ -40,6 +40,10 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             Expanded(
               child: PageView(
                 controller: _page,
+                // Non-scrollable: the practice card (page 2) needs the horizontal
+                // drag for its swipe — a scrollable PageView would steal it. Users
+                // advance with NEXT / the dots.
+                physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (i) => setState(() => _index = i),
                 children: const [
                   _CardShell(

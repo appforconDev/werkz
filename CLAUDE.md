@@ -9,6 +9,7 @@ You are working in the Werkz monorepo: a mobile game layer for agentic coding. R
 3. **Small increments, working state.** Prefer a thin vertical slice that runs over a broad layer that doesn't. No speculative abstraction.
 4. **Design decisions live in the GDD.** If implementation forces a deviation from `docs/gamedesign.md`, stop and flag it — do not silently redesign. Approved deviations get a note in the GDD's Open Questions section.
 5. **Handoffs:** significant context for the next session goes in `.claude/handoff/` per Winbergh convention.
+6. **UI is screenshot-gated (STANDING RULE, task 12).** Every task that touches app UI MUST generate a golden screenshot (`flutter_test` + `matchesGoldenFile`, or integration screenshots) for EVERY screen it changed, rendered at the iPhone-12 logical size **390×844**, and CC MUST VIEW each image before claiming the task done. Goldens live in `app/test/goldens/`. A layout bug that is visible in a screenshot and still reaches Rickard is a process failure — same severity tier as a broken test. Regenerate with `flutter test --update-goldens` and open each PNG.
 
 ## Stack rules
 

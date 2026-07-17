@@ -197,6 +197,9 @@ class WorkshopController extends Notifier<WorkshopState> {
           'toolCategory': e.payload['toolCategory'],
           'destructiveCategory': e.payload['destructiveCategory'],
           'diffLines': e.payload['diffLines'],
+          // Device-zone diff core (§4.3) — for Bash this is the command text.
+          // Was dropped here, so live decisions showed "(no diff)". (B4a)
+          'diffCore': e.payload['diffCore'],
           'openedAt': e.timestamp,
         });
         if (!pending.any((p) => p.decisionId == d.decisionId)) pending = [...pending, d];

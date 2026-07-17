@@ -24,7 +24,8 @@ class StackedWorkshop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final topInset = MediaQuery.of(context).padding.top;
+    // Rooms sit below the status bar (HomeScreen lays them out that way), so no
+    // safe-area inset is needed here — chips ride each room's top-left corner.
     return Container(
       color: Werkz.gunmetal, // shows through as the floor-slab divider
       child: Column(
@@ -36,7 +37,7 @@ class StackedWorkshop extends StatelessWidget {
                 asset: _order[i].$2,
                 label: _order[i].$3,
                 active: _order[i].$1 == activeRoom,
-                chipTopInset: i == 0 ? topInset + 4 : 4,
+                chipTopInset: 4,
               ),
             ),
           ],

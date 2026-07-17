@@ -43,7 +43,7 @@ class _RequisitionOverlayState extends State<RequisitionOverlay> with TickerProv
   // Independent stamp slam → hold → fade.
   late final AnimationController _stamp =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 1150));
-  final _player = AudioPlayer();
+  AudioPlayer? _player; // created lazily on first commit (avoids plugin init in golden tests)
 
   Offset _drag = Offset.zero;
   Offset _grip = Offset.zero; // where the finger grabbed, for rotation origin
@@ -63,7 +63,7 @@ class _RequisitionOverlayState extends State<RequisitionOverlay> with TickerProv
     _spring.dispose();
     _fly.dispose();
     _stamp.dispose();
-    _player.dispose();
+    _player?.dispose();
     super.dispose();
   }
 
@@ -109,7 +109,9 @@ class _RequisitionOverlayState extends State<RequisitionOverlay> with TickerProv
     if (_committing != null) return;
     setState(() => _committing = decision);
     HapticFeedback.heavyImpact();
-    unawaited(_player.play(AssetSource('sfx/stamp.wav')));
+    try {
+      unawaited((_player ??= AudioPlayer()).play(AssetSource('sfx/stamp.wav')));
+    } catch (_) {/* audio unavailable (e.g. tests) — the visual payoff still fires */}
     // Both paths decide when the stamp animation completes (pump-friendly).
     _stamp.addStatusListener((s) {
       if (s == AnimationStatus.completed) widget.onDecide(decision);
@@ -291,17 +293,30 @@ class _RequisitionOverlayState extends State<RequisitionOverlay> with TickerProv
   }
 
   Widget _swipeHints() {
+    // FittedBox scaleDown guarantees the two hints never overflow at 390pt.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: const [
-        Row(children: [
-          Icon(Icons.chevron_left, color: Werkz.stampRed),
-          Text('SWIPE — DENIED', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.stampRed, fontWeight: FontWeight.bold, fontSize: 11)),
-        ]),
-        Row(children: [
-          Text('APPROVED — SWIPE', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.approvalGreen, fontWeight: FontWeight.bold, fontSize: 11)),
-          Icon(Icons.chevron_right, color: Werkz.approvalGreen),
-        ]),
+        Expanded(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.chevron_left, color: Werkz.stampRed, size: 18),
+              Text('SWIPE — DENIED', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.stampRed, fontWeight: FontWeight.bold, fontSize: 11)),
+            ]),
+          ),
+        ),
+        SizedBox(width: 8),
+        Expanded(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('APPROVED — SWIPE', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.approvalGreen, fontWeight: FontWeight.bold, fontSize: 11)),
+              Icon(Icons.chevron_right, color: Werkz.approvalGreen, size: 18),
+            ]),
+          ),
+        ),
       ],
     );
   }
