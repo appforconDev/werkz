@@ -38,7 +38,7 @@ void main() {
   testWidgets('swipe LEFT past threshold denies', (tester) async {
     String? decided;
     await _pump(tester, (d) => decided = d);
-    await tester.drag(find.byType(RequisitionOverlay), const Offset(-200, 0));
+    await tester.drag(find.byType(RequisitionOverlay), const Offset(-400, 0));
     await tester.pumpAndSettle();
     expect(decided, 'deny');
   });
@@ -46,16 +46,38 @@ void main() {
   testWidgets('swipe RIGHT past threshold approves', (tester) async {
     String? decided;
     await _pump(tester, (d) => decided = d);
-    await tester.drag(find.byType(RequisitionOverlay), const Offset(200, 0));
+    await tester.drag(find.byType(RequisitionOverlay), const Offset(400, 0));
     await tester.pumpAndSettle();
     expect(decided, 'allow');
   });
 
-  testWidgets('a small drag under threshold does NOT decide', (tester) async {
+  testWidgets('a small drag under threshold does NOT decide (springs back)', (tester) async {
     String? decided;
     await _pump(tester, (d) => decided = d);
     await tester.drag(find.byType(RequisitionOverlay), const Offset(-40, 0));
     await tester.pumpAndSettle();
     expect(decided, isNull);
+  });
+
+  testWidgets('a fast flick under threshold still completes (momentum)', (tester) async {
+    String? decided;
+    await _pump(tester, (d) => decided = d);
+    // Short distance but high velocity → flick completes to the right.
+    await tester.fling(find.byType(RequisitionOverlay), const Offset(120, 0), 2000);
+    await tester.pumpAndSettle();
+    expect(decided, 'allow');
+  });
+
+  testWidgets('reduced effects still decides, without the long payoff', (tester) async {
+    String? decided;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RequisitionOverlay(decision: _decision(), reducedEffects: true, onDecide: (d) => decided = d),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(RequisitionOverlay), const Offset(400, 0));
+    await tester.pumpAndSettle();
+    expect(decided, 'allow');
   });
 }

@@ -258,6 +258,24 @@ class WorkshopController extends Notifier<WorkshopState> {
   }
 }
 
+// --- Accessibility: reduced stamp/swipe effects ---
+const _kReducedEffects = 'werkz.reducedEffects';
+
+final reducedEffectsProvider =
+    AsyncNotifierProvider<ReducedEffectsController, bool>(ReducedEffectsController.new);
+
+class ReducedEffectsController extends AsyncNotifier<bool> {
+  FlutterSecureStorage get _s => ref.read(secureStorageProvider);
+
+  @override
+  Future<bool> build() async => (await _s.read(key: _kReducedEffects)) == '1';
+
+  Future<void> set(bool value) async {
+    await _s.write(key: _kReducedEffects, value: value ? '1' : '0');
+    state = AsyncData(value);
+  }
+}
+
 // --- First-run flow: shown once, re-openable from settings ---
 const _kSeenFirstRun = 'werkz.seenFirstRun';
 

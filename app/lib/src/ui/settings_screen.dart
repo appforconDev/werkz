@@ -105,6 +105,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const SizedBox(height: 24),
 
+          _section('ACCESSIBILITY'),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            activeThumbColor: Werkz.approvalGreen,
+            title: const Text('Reduced effects',
+                style: TextStyle(fontFamily: Werkz.mono, fontSize: 13, color: Werkz.machine)),
+            subtitle: const Text('Skip the stamp-slam animation and momentum on decisions.',
+                style: TextStyle(fontFamily: Werkz.mono, fontSize: 10, color: Werkz.gunmetal)),
+            value: ref.watch(reducedEffectsProvider).asData?.value ?? false,
+            onChanged: (v) => ref.read(reducedEffectsProvider.notifier).set(v),
+          ),
+          const SizedBox(height: 16),
+
           _section('WORKSHOP'),
           TextButton(
             onPressed: () {

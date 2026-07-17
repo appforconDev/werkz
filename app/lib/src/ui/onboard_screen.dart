@@ -47,15 +47,23 @@ class OnboardScreen extends StatelessWidget {
               ),
               const _Step(
                 n: 2,
-                child: Text('A pairing QR appears in your terminal.',
+                child: Text('A pairing QR appears in your terminal. Scan it with the button below.',
                     style: TextStyle(fontFamily: Werkz.mono, fontSize: 13, height: 1.4)),
               ),
               const _Step(
                 n: 3,
-                child: Text('Scan it with the button below.',
+                child: Text('Restart your Claude Code session after installing — sessions '
+                    'started before you ran the command do not see the hook.',
                     style: TextStyle(fontFamily: Werkz.mono, fontSize: 13, height: 1.4)),
               ),
-              const SizedBox(height: 28),
+              const _Step(
+                n: 4,
+                child: Text('Run Claude Code in DEFAULT permission mode. Decisions only reach '
+                    'your phone when Claude asks permission. If you enable acceptEdits / '
+                    'auto / bypass, the workshop is bypassed and the app will warn you.',
+                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 13, height: 1.4)),
+              ),
+              const SizedBox(height: 24),
               FilledButton(
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                 onPressed: () => Navigator.of(context).push(
