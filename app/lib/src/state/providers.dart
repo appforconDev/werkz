@@ -40,9 +40,10 @@ class PairingController extends AsyncNotifier<StoredPairing?> {
   }
 
   /// Pair with a scanned/entered payload; persist the session token on success.
+  /// Returns null on success, or a human error string.
   Future<String?> pair(PairingPayload p) async {
-    final session = await DaemonClient.pair(p);
-    if (session == null) return 'Pairing rejected (token used or invalid).';
+    final (session, error) = await DaemonClient.pair(p);
+    if (session == null) return error ?? 'Pairing rejected.';
     await _s.write(key: _kSession, value: session);
     await _s.write(key: _kHost, value: p.host);
     await _s.write(key: _kPort, value: p.port.toString());

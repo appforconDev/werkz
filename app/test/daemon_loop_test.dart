@@ -44,8 +44,8 @@ void main() {
       await ready.future.timeout(const Duration(seconds: 15));
       final payload = PairingPayload.tryDecode(payloadB64)!;
 
-      final session = await DaemonClient.pair(payload);
-      expect(session, isNotNull, reason: 'pairing should succeed');
+      final (session, pairErr) = await DaemonClient.pair(payload);
+      expect(session, isNotNull, reason: 'pairing should succeed ($pairErr)');
 
       final client = DaemonClient(payload: payload, sessionToken: session!);
       final gotDecision = Completer<String>();

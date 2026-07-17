@@ -33,15 +33,28 @@ class DaemonClient {
 
   DaemonClient({required this.payload, required this.sessionToken});
 
+  // Test seam: override the pairing network call in widget tests.
+  static Future<(String?, String?)> Function(PairingPayload)? pairOverride;
+
   // --- Pairing (static: no instance yet) ---
-  static Future<String?> pair(PairingPayload p) async {
-    final res = await http.post(
-      Uri.parse('${p.httpBase}/pair'),
-      headers: {'content-type': 'application/json'},
-      body: jsonEncode({'token': p.token}),
-    );
-    if (res.statusCode != 200) return null;
-    return (jsonDecode(res.body) as Map<String, dynamic>)['sessionToken'] as String?;
+  // Returns (sessionToken, error). error is set when the daemon rejected or was
+  // unreachable — never leave the caller hanging.
+  static Future<(String?, String?)> pair(PairingPayload p) async {
+    if (pairOverride != null) return pairOverride!(p);
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${p.httpBase}/pair'),
+            headers: {'content-type': 'application/json'},
+            body: jsonEncode({'token': p.token}),
+          )
+          .timeout(const Duration(seconds: 5));
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode != 200) return (null, body['error'] as String? ?? 'pairing rejected');
+      return (body['sessionToken'] as String?, null);
+    } catch (_) {
+      return (null, 'workshop unreachable — is `npx werkz` running on the same network?');
+    }
   }
 
   Map<String, String> get _authHeaders => {

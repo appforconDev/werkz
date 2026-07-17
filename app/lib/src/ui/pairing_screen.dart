@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -5,12 +6,17 @@ import '../models/pairing_payload.dart';
 import '../state/providers.dart';
 import 'theme.dart';
 
-// First 60 seconds (GDD §7.1), app side: scan the QR the daemon prints, pair,
-// store the session token. Manual host:port + token fallback for emulators.
+// Camera pairing screen — pushed from the onboarding screen, so it is created
+// fresh on every entry (including after unpair → repair). We let MobileScanner
+// OWN its controller: in mobile_scanner 7.x the widget only registers the
+// app-lifecycle observer and manages start/stop/dispose when it owns the
+// controller (widget.controller == null). Passing our own controller (the
+// task-10 change) skipped that and rendered a black preview on iOS — so we no
+// longer pass one.
 //
-// The scanner controller is created fresh in initState and disposed in dispose,
-// so re-mounting after unpair (a brand-new State) always gets a live camera.
-// Every scan produces VISIBLE feedback — silent non-reaction is forbidden.
+// On successful pairing this route POPS itself: the root swaps its home to the
+// workshop underneath the pushed route, so without a pop the app would hang on
+// "Paired…". A 5s watchdog surfaces WHY if navigation ever stalls.
 class PairingScreen extends ConsumerStatefulWidget {
   const PairingScreen({super.key});
   @override
@@ -18,36 +24,38 @@ class PairingScreen extends ConsumerStatefulWidget {
 }
 
 class _PairingScreenState extends ConsumerState<PairingScreen> {
-  MobileScannerController? _scanner;
   bool _busy = false;
   bool _manual = false;
-  String? _status; // neutral/positive feedback
-  String? _error; // rejection feedback
-  String? _lastRaw; // de-dupe repeated frames of the same code
-
-  @override
-  void initState() {
-    super.initState();
-    _scanner = MobileScannerController();
-  }
+  String? _status;
+  String? _error;
+  String? _lastRaw;
+  Timer? _watchdog;
 
   @override
   void dispose() {
-    _scanner?.dispose();
+    _watchdog?.cancel();
     super.dispose();
   }
 
   Future<void> _submit(PairingPayload p) async {
     setState(() { _busy = true; _error = null; _status = 'Requisition read — pairing…'; });
     final err = await ref.read(pairingControllerProvider.notifier).pair(p);
-    if (mounted) {
-      setState(() {
-        _busy = false;
-        _error = err;
-        _status = err == null ? 'Paired. Opening the workshop…' : null;
-      });
-      if (err != null) _lastRaw = null; // allow a retry scan
+    if (!mounted) return;
+    if (err != null) {
+      setState(() { _busy = false; _error = err; _status = null; _lastRaw = null; });
+      return;
     }
+    // Success: the root now shows the workshop under this pushed route — pop to
+    // reveal it. Watchdog: if we're somehow still here after 5s, say why.
+    setState(() { _status = 'Paired. Opening the workshop…'; });
+    _watchdog?.cancel();
+    _watchdog = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        final conn = ref.read(workshopProvider).conn.name;
+        setState(() { _busy = false; _error = 'Workshop did not open (state: $conn). Pull down to retry.'; _status = null; });
+      }
+    });
+    Navigator.of(context).maybePop();
   }
 
   void _onScan(BarcodeCapture cap) {
@@ -59,11 +67,7 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
     if (p != null) {
       _submit(p);
     } else {
-      // ANY scan gets feedback — never a silent non-reaction.
-      setState(() {
-        _status = null;
-        _error = 'Unreadable code — that is not a WERKZ pairing QR.';
-      });
+      setState(() { _status = null; _error = 'Unreadable code — that is not a WERKZ pairing QR.'; });
       _lastRaw = null;
     }
   }
@@ -72,28 +76,23 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Werkz.cream,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Column(children: [
-                Text('WERKZ INDUSTRIES',
-                    style: TextStyle(fontFamily: Werkz.mono, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: 4)),
-                Text('PRESENT PAIRING REQUISITION TO THE WORKSHOP TERMINAL',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 10, color: Werkz.gunmetal, letterSpacing: 1)),
-              ]),
-            ),
-            Expanded(child: _manual ? _manualEntry() : _scannerView()),
-            _feedback(),
-            TextButton(
-              onPressed: () => setState(() { _manual = !_manual; _error = null; _status = null; }),
-              child: Text(_manual ? 'USE CAMERA' : 'ENTER BY HAND (EMULATOR)',
-                  style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.gunmetal)),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        backgroundColor: Werkz.machine,
+        foregroundColor: Werkz.cream,
+        title: const Text('SCAN PAIRING QR',
+            style: TextStyle(fontFamily: Werkz.mono, letterSpacing: 2, fontSize: 14)),
+      ),
+      body: Column(
+        children: [
+          Expanded(child: _manual ? _manualEntry() : _scannerView()),
+          _feedback(),
+          TextButton(
+            onPressed: () => setState(() { _manual = !_manual; _error = null; _status = null; }),
+            child: Text(_manual ? 'USE CAMERA' : 'ENTER BY HAND (EMULATOR)',
+                style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.gunmetal)),
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }
@@ -119,12 +118,11 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
   }
 
   Widget _scannerView() {
-    final scanner = _scanner;
-    if (scanner == null) return const SizedBox.shrink();
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(border: Border.all(color: Werkz.gunmetal, width: 3)),
-      child: MobileScanner(controller: scanner, onDetect: _onScan),
+      // MobileScanner owns its controller → correct lifecycle + live preview.
+      child: MobileScanner(onDetect: _onScan),
     );
   }
 
