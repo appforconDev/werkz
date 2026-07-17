@@ -194,14 +194,14 @@ class WorkshopController extends Notifier<WorkshopState> {
       state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode, preflight: preflight);
       _syncNarration(); // retry a queued key + refresh the "narration active" chip
     };
-    client.onEvent = (e) {
-      if (!_disposed) _handleEvent(e);
+    client.onEvent = (e, replay) {
+      if (!_disposed) _handleEvent(e, replay);
     };
     _client = client;
     client.connect();
   }
 
-  void _handleEvent(WerkzEvent e) {
+  void _handleEvent(WerkzEvent e, bool replay) {
     // narration.ready is not a feed line itself — it upgrades an existing line
     // from template text to the real Haiku narration.
     if (e.eventType == 'narration.ready') {
@@ -215,6 +215,16 @@ class WorkshopController extends Notifier<WorkshopState> {
 
     final feed = [...state.feed, e];
     if (feed.length > _feedCap) feed.removeRange(0, feed.length - _feedCap);
+
+    // REPLAY = HISTORY (task 16 B). A replayed event is a log line, never a live
+    // prompt or banner: pending decisions come ONLY from the connect snapshot
+    // (onWelcome), and a restored terminal job state must not re-fire the banner.
+    // So resolved/superseded/expired decisions can never re-present on reconnect.
+    if (replay) {
+      state = state.copyWith(feed: feed);
+      return;
+    }
+
     var pending = state.pending;
     var autopilot = state.autopilot;
     var mode = state.permissionMode;

@@ -80,6 +80,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     final unread = ws.feed.isNotEmpty && ws.feed.last.eventId != _lastSeenEventId;
 
+    // Bottom bar total height (content + home-indicator inset + top border) so
+    // the floating work-order strip can sit just above it.
+    final barHeight = 42 + MediaQuery.of(context).viewPadding.bottom + 2;
+
     // Start the auto-dismiss countdown when a work order reaches COMPLETED.
     ref.listen<WorkshopState>(workshopProvider, (prev, next) {
       if (prev?.workOrder.phase != next.workOrder.phase) {
@@ -100,14 +104,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (ws.unreachable) const _UnreachableBanner(),
               if (showPreflight) _PreflightBanner(preflight: pf),
               if (ws.autopilot) const _AutopilotBanner(),
-              if (ws.workOrder.phase != WorkOrderPhase.idle)
-                _WorkOrderStrip(
-                  status: ws.workOrder,
-                  onDismiss: () {
-                    _woDismiss?.cancel();
-                    ref.read(workshopProvider.notifier).dismissWorkOrder();
-                  },
-                ),
               Expanded(child: StackedWorkshop(activeRoom: _activeRoom(ws))),
               _BottomBar(
                 unread: unread,
@@ -116,6 +112,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ],
           ),
+          // Work-order status floats ABOVE the bottom bar as an overlay — it must
+          // never reflow the room stack when appearing/dismissing (task 16 B2).
+          if (ws.workOrder.phase != WorkOrderPhase.idle)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: barHeight,
+              child: _WorkOrderStrip(
+                status: ws.workOrder,
+                onDismiss: () {
+                  _woDismiss?.cancel();
+                  ref.read(workshopProvider.notifier).dismissWorkOrder();
+                },
+              ),
+            ),
           if (showOverlay)
             RequisitionOverlay(
               key: ValueKey(top.decisionId),
@@ -146,17 +157,20 @@ class _BottomBar extends StatelessWidget {
         border: Border(top: BorderSide(color: Werkz.gunmetal, width: 2)),
         boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8, offset: Offset(0, -2))],
       ),
+      // SafeArea adds ONLY the home-indicator inset; the content box hugs the
+      // labels so there's no dead steel under them (task 16 A4 — height = content
+      // + bottom inset, no double padding).
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 54,
+          height: 42,
           child: Stack(
             children: [
               // Subtle rivets in the bar corners.
-              const Positioned(left: 6, top: 6, child: _Rivet()),
-              const Positioned(right: 6, top: 6, child: _Rivet()),
-              const Positioned(left: 6, bottom: 6, child: _Rivet()),
-              const Positioned(right: 6, bottom: 6, child: _Rivet()),
+              const Positioned(left: 6, top: 5, child: _Rivet()),
+              const Positioned(right: 6, top: 5, child: _Rivet()),
+              const Positioned(left: 6, bottom: 5, child: _Rivet()),
+              const Positioned(right: 6, bottom: 5, child: _Rivet()),
               Row(
                 children: [
                   Expanded(child: _BarTab(icon: Icons.receipt_long, label: 'LOG', onTap: onLog, badge: unread)),

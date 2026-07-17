@@ -2,6 +2,13 @@
 // logical size (390×844) and snapshot it to app/test/goldens/. Layout, safe
 // area, overflow banners, and spacing are all faithful; CC views each PNG.
 //
+// SAFE AREA (task 16 A — the harness lied): the insets MUST be set on
+// tester.view via FakeViewPadding, NOT via a wrapping MediaQuery. MaterialApp
+// builds its own MediaQuery.fromView(view) which shadows any ancestor
+// MediaQuery, so an outer wrapper is silently ignored — every "verified"
+// golden was rendered WITHOUT the notch/home-indicator. iPhone 12: top 47,
+// bottom 34 (logical; physical == logical here because dpr = 1.0).
+//
 // Callers build the full ProviderScope+MaterialApp inline (so the `Override`
 // list type is inferred — flutter_riverpod 3.x doesn't export the name).
 import 'package:flutter/material.dart';
@@ -58,15 +65,14 @@ Future<void> pumpGoldenApp(
   Duration settle = const Duration(milliseconds: 700),
 }) async {
   tester.view.devicePixelRatio = 1.0;
-  tester.view.physicalSize = iphone12;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
+  tester.view.physicalSize = iphone12; // logical == physical at dpr 1.0
+  // Real iPhone-12 safe-area insets set ON THE VIEW so MediaQuery.fromView (which
+  // MaterialApp builds internally) actually reports them. This is the fix.
+  tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+  tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
+  addTearDown(tester.view.reset);
 
-  // Simulate the iPhone-12 notch/status-bar inset so safe-area breaks show up.
-  await tester.pumpWidget(MediaQuery(
-    data: const MediaQueryData(size: iphone12, padding: EdgeInsets.only(top: 47, bottom: 34)),
-    child: app,
-  ));
+  await tester.pumpWidget(app);
   // Let asset images decode so rooms render in the golden.
   await tester.runAsync(() async => Future<void>.delayed(const Duration(milliseconds: 150)));
   await tester.pump();

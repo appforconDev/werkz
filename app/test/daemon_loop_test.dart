@@ -49,8 +49,8 @@ void main() {
 
       final client = DaemonClient(payload: payload, sessionToken: session!);
       final gotDecision = Completer<String>();
-      client.onEvent = (e) {
-        if (e.eventType == 'decision.requested') {
+      client.onEvent = (e, replay) {
+        if (e.eventType == 'decision.requested' && !replay) {
           final id = e.payload['decisionId'] as String;
           client.release(id, 'deny');
           if (!gotDecision.isCompleted) gotDecision.complete(id);

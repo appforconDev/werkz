@@ -14,15 +14,16 @@ class StackedWorkshop extends StatelessWidget {
   final String activeRoom;
   const StackedWorkshop({super.key, required this.activeRoom});
 
-  // Per-room cover alignment (task 13/15 C): the room art is landscape (892×474)
-  // and each storey panel is taller-aspect, so BoxFit.cover crops. Bias the crop
-  // per room so the baked WERKZ signage survives instead of being sliced at a
-  // divider — advisor biases DOWN so the desk W-plate reads clear of the seam,
-  // the floor keeps its clock sign, the archive keeps the WERKZ shelf sign.
+  // Per-room cover alignment (task 16 A2). At the iPhone-12 layout the panels are
+  // slightly narrower-aspect than the 892×474 art, so BoxFit.cover crops
+  // HORIZONTALLY and the full image height shows — every storey's WERKZ signage
+  // (ceiling to floor) is visible. These y-biases only matter if a taller chrome
+  // ever flips cover to a vertical crop; they keep the PRIMARY sign centered then:
+  // advisor's desk W-plate, the workshop clock, the archive shelf plate.
   static const _order = <(String room, String asset, String label, Alignment align)>[
-    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', Alignment(0, 0.45)),
-    ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', Alignment(0, -0.15)),
-    ('archive', 'assets/art/archive.png', 'ARCHIVE', Alignment(0, -0.25)),
+    ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', Alignment(0, 0.15)),
+    ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', Alignment(0, 0.0)),
+    ('archive', 'assets/art/archive.png', 'ARCHIVE', Alignment(0, -0.2)),
   ];
 
   @override

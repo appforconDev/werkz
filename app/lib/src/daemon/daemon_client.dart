@@ -29,7 +29,9 @@ class DaemonClient {
 
   ConnState state = ConnState.disconnected;
 
-  void Function(WerkzEvent event)? onEvent;
+  // replay=true means this event is history from the reconnect snapshot — the
+  // app must log it but NEVER treat it as a live prompt/banner (task 16 B).
+  void Function(WerkzEvent event, bool replay)? onEvent;
   void Function(List<PendingDecision> pending, bool autopilot, String? mode, Preflight? preflight)? onWelcome;
   void Function(ConnState state)? onState;
   // True once the daemon has been unreachable across several reconnect attempts
@@ -182,7 +184,7 @@ class DaemonClient {
       case 'event':
         final ev = WerkzEvent.fromJson((msg['event'] as Map).cast<String, dynamic>());
         _lastEventId = ev.eventId;
-        onEvent?.call(ev);
+        onEvent?.call(ev, msg['replay'] == true);
         break;
       case 'pong':
       case 'released':

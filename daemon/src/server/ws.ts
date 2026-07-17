@@ -82,7 +82,9 @@ export function attachWsServer(
             ...service.permissionModeSummary(), // { mode, autopilot }
             ...(getPreflight ? { preflight: getPreflight() } : {}), // startup diagnostics (task 13 B)
           });
-          for (const e of replay) send(ws, { type: 'event', event: e });
+          // Mark replayed events so the app treats them as HISTORY (log only) —
+          // never re-presenting a decision or re-firing a banner (task 16 B).
+          for (const e of replay) send(ws, { type: 'event', event: e, replay: true });
           break;
         }
         case 'subscribe': {

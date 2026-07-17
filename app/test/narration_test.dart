@@ -59,7 +59,7 @@ void main() {
       'decisionId': 'd1', 'decisionClass': 'destructive', 'destructiveCategory': 'redirect-overwrite',
       'room': 'workshop-floor', 'toolCategory': 'Bash',
     });
-    fake.onEvent!(decision);
+    fake.onEvent!(decision, false);
     var ws = container.read(workshopProvider);
     expect(ws.narration.containsKey('evt-1'), isFalse);
     expect(narrate(decision), contains('Requisition')); // template line
@@ -67,7 +67,7 @@ void main() {
     // The real narration lands, keyed to the source event.
     fake.onEvent!(_event('evt-2', 'narration.ready', {
       'refEventId': 'evt-1', 'text': 'Requisition 47-B filed. The stockroom braces.',
-    }));
+    }), false);
     ws = container.read(workshopProvider);
     expect(ws.narration['evt-1'], 'Requisition 47-B filed. The stockroom braces.');
 
