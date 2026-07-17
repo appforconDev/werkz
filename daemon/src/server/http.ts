@@ -93,7 +93,7 @@ export function createDaemonServer({ service, pairing, devMode }: ServerDeps): S
         return json(res, 200, { pending: service.listPending() });
       }
       if (req.method === 'GET' && path === '/status') {
-        return json(res, 200, { pending: service.pendingCount });
+        return json(res, 200, { pending: service.pendingCount, ...service.permissionModeSummary() });
       }
       if (req.method === 'GET' && path === '/release') {
         const id = url.searchParams.get('id') ?? '';

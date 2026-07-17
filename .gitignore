@@ -8,3 +8,8 @@ output/
 *.log
 build/
 .werkz/
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/ios/Flutter/ephemeral/
+app/**/Pods/

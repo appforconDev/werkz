@@ -2,7 +2,7 @@
 
 > Living document. CC updates this at the end of every work session (see CLAUDE.md). Newest entry on top under "Log". "Now" is the single source of truth for what to work on next.
 
-## Status: P0 complete → P1 — Daemon + event stream
+## Status: P1 daemon done → P2 — App MVP (moment loop live)
 
 **Decided (locked):**
 - Name: **Werkz**, domain werkz.app (registering)
@@ -17,13 +17,13 @@
 
 ## Now (next 3 tasks, in order)
 
-1. **WS channel review** — LAN WebSocket channel built: token-gated `/ws`, versioned protocol, event stream + pending snapshot + replay-from-eventId, decision release, severity filters, heartbeat; paired sessions + pending state persist across restart (orphaned holds superseded cleanly). 76 tests, e2e demo in `daemon/experiments/ws-channel-demo.md`. Gate: Rickard reviews demo evidence.
-2. **P1 narration v0** — classification + dry-log text (no LLM yet), then BYOK Haiku narration with 80/18/2 weighting (GDD §3, event-model §4).
-3. **P2 kickoff (app)** — Flutter workshop shell consuming the WS channel; replace fake-phone. Vertical rooms, decision overlay with diff core + stamp swipe.
+1. **App moment-loop review + device video** — Flutter pair/connect/decide slice built: pairing (QR + manual), DaemonClient (WS/hello/heartbeat/reconnect/replay), the requisition overlay (diff core always visible, swipe-stamp, haptics + sound), ambient backdrop + log strip, autopilot banner. `flutter analyze` clean, 5/5 tests incl. a live-daemon integration loop. Gate: Rickard records the on-device video (real phone on LAN, camera QR, real CC session, swipe-deny blocks, latency numbers) — the one thing headless can't produce. See `app/DEMO.md`.
+2. **P1 narration v0** — classification + dry-log text (the app already has dry templates; move the engine into the daemon), then BYOK Haiku narration with 80/18/2 weighting (GDD §3, event-model §4).
+3. **P2 world layer** — Flame vertical workshop: stacked rooms, worker sprites, ambient states (replaces the static backdrop).
 
 **P1 exit criteria (hardware, owner Rickard, personal dogfooding):** (g1) full multi-hour wall-clock hold released to execution; (g2) laptop sleep/wake across an open hold. Relay does not ship until both green.
 
-**Done:** Task 1 (concept art) · Task 2 (event-model v0.2) · Task 3 (repo scaffold) · Task 4 (hold prototype — VIABLE) · Task 5 (event-model v0.3 + adapter slice) · Task 6 (daemon bootstrap) · Task 7 (LAN WS channel). All 2026-07-16.
+**Done:** Task 1 (concept art) · Task 2 (event-model v0.2) · Task 3 (repo scaffold) · Task 4 (hold prototype — VIABLE) · Task 5 (event-model v0.3 + adapter slice) · Task 6 (daemon bootstrap) · Task 7 (LAN WS channel) — all 2026-07-16 · Task 8 (app moment loop) 2026-07-17.
 
 ## Blocked / waiting
 
@@ -41,6 +41,7 @@
 
 ## Log
 
+- **2026-07-17 (task 8, app moment loop — P2 slice 1)** — Flutter app: pair → connect → decide, end to end, nothing else. Pairing (mobile_scanner QR + manual paste, session token in flutter_secure_storage); DaemonClient speaks the WS protocol (hello/replay/heartbeat/backoff-reconnect); Riverpod state. The requisition overlay built with love: slides up, 1955 layout, **diff core always visible** (monospace, +green/−red), swipe right=APPROVED / left=DENIED stamp slam, haptics + synthesized stamp.wav, <1s. Ambient screen = approved workshop-floor still + dry-template "INCIDENT LOG" strip (no Flame). Autopilot banner when the daemon reports a permissive mode. Daemon change: exposes permission mode in ws welcome / /status / live session.mode event; and now sends `diffCore` in the decision payload — device-zone only (§4.3), never persisted (stripped before pending.json), never shared. flutter analyze clean; 5/5 app tests incl. a live-daemon integration loop (spawn daemon → pair → WS → held destructive PreToolUse → release deny → hook response deny). Daemon 76/76. Gate needing hardware: on-device video (Rickard). Details in `app/DEMO.md`.
 - **2026-07-16 (task 7, LAN WS channel)** — The live channel the Flutter app will speak. `/ws` on the daemon port, session-token auth at upgrade, versioned JSON protocol (hello/welcome), heartbeat ping/pong. Server→client: event stream as bus events land, pending snapshot on connect, replay-from-eventId on reconnect (uuidv7 time-ordered + JSONL). Client→server: decision release, severity subscribe filters. Persistence: paired session tokens and open decisions survive a daemon restart — orphaned holds emit `decision.superseded` (reason daemon-restart, no trust effect), never silently lost. Broadcast is fire-and-forget from the bus (never blocks routing, §3.5). fake-phone upgraded to WS (HTTP polling kept behind --http). 76 tests (+WS protocol, +restart recovery). E2E: two surfaces share one decision consistently; kill -9 mid-hold → restart recovers cleanly, session token still valid. Caveat surfaced: under acceptEdits, CC's fallback when the daemon is absent ACCEPTS — permissive modes decide without you if the workshop is closed. Demo in `daemon/experiments/ws-channel-demo.md`.
 - **2026-07-16 (task 6, daemon bootstrap)** — `npx werkz` "first 60 seconds", daemon side: startup + terminal QR (host/port/one-time token) + friendly 1955 status line; hook injection into project `.claude/settings.json` that MERGES (preserves user hooks), is idempotent, and `npx werkz uninstall` removes exactly ours — verified byte-identical restore. projectId now derives from git identity (origin remote normalized, else repo-root path hash): worktrees/branches/clones = same workshop, multiple sessions = multiple workers, always free; multi-repo = paid boundary (event-model §1, P4 note). Pairing/auth: one-time QR token → POST /pair → session token; decision/state endpoints require it; /dev/* only behind WERKZ_DEV=1. mDNS advertise (_werkz._tcp) best-effort. scripts/fake-phone.mjs stands in for Flutter. 68 tests. E2E demo (fresh repo → pair → held destructive decision denied through paired channel → clean uninstall) in `daemon/experiments/bootstrap-demo.md`.
 - **2026-07-16 (task 5, event-model v0.3 + adapter slice)** — Amendment folded in: decision hook is `PreToolUse` (PermissionRequest demoted — never fires headless), hold ceiling fixed at open (§3.4), new §3.5 latency budget (<50 ms non-decision path, release-blocker tier) and §3.6 dedup rule. CRITICAL ASSUMPTION box → RESOLVED with two hardware gaps as P1 exit criteria. Then built the first real daemon slice under `daemon/src`: config, event bus (JSONL), classifier→router (classes + trust thresholds), dedup store, pending-hold manager, trust store, CC adapter (PreToolUse → WerkzEvent, game-safe payloads), http server (`/pretooluse`, `/release`, `/dev/trust`), runnable CLI. 54 tests pass incl. p99<50 ms latency and retry-after-deny dedup. Demo evidence: real CC 2.1.187 sessions — read auto-allowed, destructive `echo > tracked` HELD → denied → CC blocked (file unchanged), routine auto-allow logged at 2.47 ms. Slice does NOT do LAN/narration/trust-lifecycle yet.

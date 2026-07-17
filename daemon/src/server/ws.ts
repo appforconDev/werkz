@@ -78,6 +78,7 @@ export function attachWsServer(
             protocolVersion: PROTOCOL_VERSION,
             pending: service.listPending(),
             replayed: replay.length,
+            ...service.permissionModeSummary(), // { mode, autopilot }
           });
           for (const e of replay) send(ws, { type: 'event', event: e });
           break;

@@ -36,6 +36,29 @@ export function roomForTool(toolName: string, command?: string): string {
   return 'workshop-floor';
 }
 
+// Diff core for the decision overlay (event-model.md §4.3: device-zone only —
+// this carries raw repo strings and must NEVER reach the share zone or be
+// persisted to disk). Returns structured lines so the app tints +/-/context.
+export interface DiffLine { sign: '+' | '-' | ' '; text: string }
+
+export function buildDiffCore(toolName: string, input: Record<string, unknown>): DiffLine[] {
+  const asLines = (s: string, sign: DiffLine['sign']): DiffLine[] =>
+    s.split('\n').map((text) => ({ sign, text }));
+  if (toolName === 'Bash') {
+    const cmd = typeof input.command === 'string' ? input.command : '';
+    return cmd.split('\n').map((text) => ({ sign: ' ' as const, text: '$ ' + text }));
+  }
+  if (toolName === 'Write') {
+    return asLines(typeof input.content === 'string' ? input.content : '', '+');
+  }
+  if (toolName === 'Edit' || toolName === 'NotebookEdit') {
+    const oldStr = typeof input.old_string === 'string' ? input.old_string : '';
+    const newStr = typeof input.new_string === 'string' ? input.new_string : '';
+    return [...(oldStr ? asLines(oldStr, '-') : []), ...(newStr ? asLines(newStr, '+') : [])];
+  }
+  return [];
+}
+
 interface BuildArgs {
   sessionId: string;         // internal session id (adapter-mapped)
   projectId: string;
@@ -67,7 +90,7 @@ export function preToolUseEvent(
   toolName: string,
   decisionClass: DecisionClass,
   isDecision: boolean,
-  extras: { diffLines?: number; destructiveCategory?: string; command?: string; decisionId?: string },
+  extras: { diffLines?: number; destructiveCategory?: string; command?: string; decisionId?: string; diffCore?: DiffLine[] },
 ): WerkzEvent {
   return buildEvent({
     sessionId: ctx.sessionId,
@@ -83,6 +106,9 @@ export function preToolUseEvent(
       ...(extras.decisionId ? { decisionId: extras.decisionId } : {}),
       ...(extras.diffLines !== undefined ? { diffLines: extras.diffLines } : {}),
       ...(extras.destructiveCategory ? { destructiveCategory: extras.destructiveCategory } : {}),
+      // Device-zone only (§4.3): the diff core shown in the overlay. Never
+      // persisted, never shared.
+      ...(isDecision && extras.diffCore ? { diffCore: extras.diffCore } : {}),
     },
   });
 }

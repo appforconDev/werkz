@@ -12,8 +12,10 @@ import { PendingDecisions } from './pending.ts';
 import { TrustStore } from './trust.ts';
 import {
   type CcHookPayload,
+  type DiffLine,
   preToolUseEvent,
   buildEvent,
+  buildDiffCore,
   roomForTool,
 } from '../adapter/cc/index.ts';
 import { deriveProjectIdentity } from '../adapter/cc/project.ts';
@@ -36,7 +38,9 @@ export interface HandleResult {
   deduped?: boolean;
 }
 
-// Game-safe view of a pending decision (no raw command/content — §4.3).
+// View of a pending decision for the app. Categories/counts are game-safe;
+// `diffCore` is device-zone only (§4.3) — shown in the overlay, never
+// persisted to disk, never shared.
 export interface PendingSummary {
   decisionId: string;
   decisionClass: string;
@@ -44,6 +48,7 @@ export interface PendingSummary {
   toolCategory: string;
   destructiveCategory?: string;
   diffLines?: number;
+  diffCore?: DiffLine[];
   openedAt: string;
 }
 
@@ -69,6 +74,7 @@ export class DecisionService {
   // Game-safe summaries of open decisions, for the phone to GET /pending.
   #pendingSummaries = new Map<string, PendingSummary>();
   #pendingStatePath: string | null;
+  #lastPermissionMode: string | null = null;
 
   constructor(config: DaemonConfig, bus: EventBus, trust = new TrustStore(), pendingStatePath: string | null = null) {
     this.#config = config;
@@ -79,7 +85,11 @@ export class DecisionService {
   }
 
   #persistPending(): void {
-    if (this.#pendingStatePath) saveJson(this.#pendingStatePath, [...this.#pendingSummaries.values()]);
+    if (!this.#pendingStatePath) return;
+    // Strip diffCore before writing to disk — it is device-zone only (§4.3)
+    // and recovery/supersede never needs it.
+    const safe = [...this.#pendingSummaries.values()].map(({ diffCore: _d, ...rest }) => rest);
+    saveJson(this.#pendingStatePath, safe);
   }
 
   /**
@@ -127,6 +137,17 @@ export class DecisionService {
     this.#trust.set(workerId, value);
   }
 
+  /**
+   * Latest CC permission mode seen, and whether it's permissive (autopilot).
+   * Permissive modes decide without the user — the app warns when the daemon
+   * would be bypassed. default/plan are NOT permissive.
+   */
+  permissionModeSummary(): { mode: string | null; autopilot: boolean } {
+    const mode = this.#lastPermissionMode;
+    const permissive = new Set(['acceptEdits', 'auto', 'dontAsk', 'bypassPermissions']);
+    return { mode, autopilot: mode ? permissive.has(mode) : false };
+  }
+
   #sessionCtx(payload: CcHookPayload): { sessionId: string; workerId: string; projectId: string } {
     const ccId = payload.session_id ?? 'unknown';
     let mapped = this.#sessions.get(ccId);
@@ -154,6 +175,18 @@ export class DecisionService {
   /** Non-decision replies synchronously; decision replies await the phone. */
   async handlePreToolUse(payload: CcHookPayload, now: number = Date.now()): Promise<HandleResult> {
     const t0 = performance.now();
+    if (typeof payload.permission_mode === 'string' && payload.permission_mode !== this.#lastPermissionMode) {
+      this.#lastPermissionMode = payload.permission_mode;
+      // Tell connected clients so the autopilot banner updates live.
+      const summary = this.permissionModeSummary();
+      this.#bus.emit(
+        buildEvent({
+          sessionId: 'building', projectId: 'building', workerId: null,
+          eventType: 'session.mode', severity: 'info',
+          payload: { mode: summary.mode, autopilot: summary.autopilot },
+        }),
+      );
+    }
     const ctx = this.#sessionCtx(payload);
     const toolName = payload.tool_name ?? 'Unknown';
     const toolInput = payload.tool_input ?? {};
@@ -189,14 +222,16 @@ export class DecisionService {
       };
     }
 
-    // Raise the requisition and hold.
+    // Raise the requisition and hold. diffCore is device-zone only (§4.3).
     const decisionId = uuidv7(now);
+    const diffCore = buildDiffCore(toolName, toolInput);
     this.#bus.emit(
       preToolUseEvent(ctx, toolName, cls.decisionClass, true, {
         diffLines: cls.diffLines,
         destructiveCategory: cls.destructiveCategory,
         command,
         decisionId,
+        diffCore,
       }),
     );
     this.#pendingSummaries.set(decisionId, {
@@ -206,6 +241,7 @@ export class DecisionService {
       toolCategory: toolName,
       ...(cls.destructiveCategory ? { destructiveCategory: cls.destructiveCategory } : {}),
       ...(cls.diffLines !== undefined ? { diffLines: cls.diffLines } : {}),
+      diffCore,
       openedAt: new Date(now).toISOString(),
     });
     this.#persistPending();
