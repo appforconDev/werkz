@@ -39,10 +39,13 @@ class LayoutTuning {
     this.appBarTopGap = 3,
     this.seamAdvisorFloor = 5,
     this.seamFloorArchive = 5,
-    this.advisorFit = RoomFit.fitHeight, // full art height → plate below the floor line reads
+    // Task 17d: signage moved to the UI (brass nameplates), so the advisor no
+    // longer needs the fitHeight excursion — it's back to cover like the others.
+    // The per-room fit toggle stays in the tuning panel (harmless, still works).
+    this.advisorFit = RoomFit.cover,
     this.workshopFit = RoomFit.cover,
     this.archiveFit = RoomFit.cover,
-    this.alignAdvisorY = 0.0, // centered X-pan for the fitHeight advisor
+    this.alignAdvisorY = 0.15,
     this.alignWorkshopY = 0.0,
     this.alignArchiveY = -0.2,
     this.advisorHeight = 288, // taller penthouse

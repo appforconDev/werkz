@@ -38,7 +38,19 @@ panel). Values PERSIST across restarts in debug (secure storage, key
 RESET clears it. When the numbers arrive, still just hardcode the `LayoutTuning`
 constructor defaults — including the three heights AND the three fit modes.
 
-## Task 17c — the ACTUAL root cause (cover vs fitHeight)
+## Task 17d — signage moved to the UI (the plate wasn't uniformly in the art)
+
+Verified the shipped assets: the advisor keeps a baked steel "⟨W⟩ WERKZ" rail at
+its bottom edge, but workshop/archive had theirs cropped by 11.4 — so a matching
+plate on every storey was never achievable from the art. Signage is now a UI
+`_Nameplate` widget in `stacked_workshop.dart` (brass/steel plate, tinted vector
+W at `assets/brand/werkz-w.png`, stenciled room name, active storey green),
+heading every storey. Advisor reverted to cover; the fit toggle stays (harmless).
+Corner chips removed. If you ever want signage changes, edit the nameplate widget
+— NEVER regenerate the room art for it. Lesson on file: verify the asset contains
+the goal before tuning the renderer.
+
+## Task 17c — the (rendering) root cause (cover vs fitHeight)
 
 17b's per-room heights were still wrong: with `BoxFit.cover` a taller slot just
 ZOOMS (scales to fill width×height, crops MORE) — it can never reveal the

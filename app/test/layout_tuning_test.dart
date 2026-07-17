@@ -61,10 +61,9 @@ void main() {
     expect(container.read(layoutTuningProvider).advisorHeight, 288);
   });
 
-  // Task 17c acceptance guard: the advisor MUST render with BoxFit.fitHeight so
-  // its full art height (incl. the plate baked below the floor line) always
-  // shows; cover geometrically cannot. Workshop/archive keep cover.
-  testWidgets('advisor renders fitHeight, workshop/archive render cover', (t) async {
+  // Task 17d: signage moved to the UI, so all three rooms default to cover again
+  // (the fitHeight excursion is gone; the per-room toggle stays for experiments).
+  testWidgets('all rooms render cover by default', (t) async {
     await pumpGoldenApp(t, app: _app());
 
     BoxFit fitOf(String asset) {
@@ -74,8 +73,16 @@ void main() {
       return img.fit!;
     }
 
-    expect(fitOf('assets/art/advisors-office.png'), BoxFit.fitHeight);
+    expect(fitOf('assets/art/advisors-office.png'), BoxFit.cover);
     expect(fitOf('assets/art/workshop-floor.png'), BoxFit.cover);
     expect(fitOf('assets/art/archive.png'), BoxFit.cover);
+  });
+
+  // Task 17d: a brass nameplate heads every storey (uniform UI signage).
+  testWidgets('a nameplate renders for every storey', (t) async {
+    await pumpGoldenApp(t, app: _app());
+    expect(find.text("ADVISOR'S OFFICE"), findsOneWidget);
+    expect(find.text('WORKSHOP FLOOR'), findsOneWidget);
+    expect(find.text('ARCHIVE'), findsOneWidget);
   });
 }
