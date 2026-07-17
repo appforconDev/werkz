@@ -25,12 +25,16 @@ class DaemonClient {
   int _backoffMs = 500;
   bool _closed = false;
   String? _lastEventId;
+  int _failedAttempts = 0; // consecutive reconnect failures (drives "unreachable")
 
   ConnState state = ConnState.disconnected;
 
   void Function(WerkzEvent event)? onEvent;
   void Function(List<PendingDecision> pending, bool autopilot, String? mode, Preflight? preflight)? onWelcome;
   void Function(ConnState state)? onState;
+  // True once the daemon has been unreachable across several reconnect attempts
+  // (machine asleep / off-network / daemon stopped). Cleared on a live message.
+  void Function(bool unreachable)? onReachability;
 
   DaemonClient({required this.payload, required this.sessionToken});
 
@@ -159,6 +163,10 @@ class DaemonClient {
 
   void _onMessage(dynamic data) {
     _backoffMs = 500; // healthy connection resets backoff
+    if (_failedAttempts != 0) {
+      _failedAttempts = 0;
+      onReachability?.call(false); // a live frame means we're reachable again
+    }
     if (state != ConnState.connected) _setState(ConnState.connected);
     final msg = jsonDecode(data as String) as Map<String, dynamic>;
     switch (msg['type']) {
@@ -193,6 +201,10 @@ class DaemonClient {
       return;
     }
     _setState(ConnState.connecting);
+    // After a couple of failed attempts, treat the daemon as unreachable so the
+    // app can explain WHY (asleep / off-network / stopped) instead of spinning.
+    _failedAttempts++;
+    if (_failedAttempts >= 2) onReachability?.call(true);
     _reconnect?.cancel();
     _reconnect = Timer(Duration(milliseconds: _backoffMs), _open);
     _backoffMs = (_backoffMs * 2).clamp(500, 15000);

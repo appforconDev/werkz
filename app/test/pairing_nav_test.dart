@@ -81,6 +81,7 @@ void main() {
 
     // Onboarding first — no camera yet.
     expect(find.text('REPORTING FOR DUTY'), findsOneWidget);
+    await tester.ensureVisible(find.text('SCAN THE PAIRING REQUISITION'));
     await tester.tap(find.text('SCAN THE PAIRING REQUISITION'));
     await tester.pumpAndSettle();
     expect(find.byType(PairingScreen), findsOneWidget);
@@ -103,6 +104,7 @@ void main() {
     DaemonClient.pairOverride = (p) async => (null, 'pairing token already used');
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('SCAN THE PAIRING REQUISITION'));
     await tester.tap(find.text('SCAN THE PAIRING REQUISITION'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('ENTER BY HAND (EMULATOR)'));

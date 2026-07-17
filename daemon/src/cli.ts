@@ -27,6 +27,7 @@ import { WorkOrderManager } from './work/work-order.ts';
 import { runPreflight, type Preflight } from './preflight/index.ts';
 import { readUserConfig, patchUserConfig } from './state/user-config.ts';
 import { resolveClaudePath } from './util/claude-path.ts';
+import { keepAwake } from './util/caffeinate.ts';
 
 const args = process.argv.slice(2);
 const command = args[0] && !args[0].startsWith('--') ? args[0] : 'start';
@@ -36,6 +37,7 @@ const flag = (name: string, fallback?: string) =>
 const projectDir = flag('--project', process.cwd())!;
 const port = Number(flag('--port', '47100'));
 const devMode = process.env.WERKZ_DEV === '1';
+const noCaffeinate = args.includes('--no-caffeinate'); // opt out of the idle-sleep hold
 
 function lanHost(): string {
   for (const iface of Object.values(networkInterfaces())) {
@@ -170,8 +172,12 @@ const recovered = service.recoverPending(); // superseded any holds orphaned by 
 const pidPath = join(stateDir, 'daemon.pid');
 try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pidPath, String(process.pid)); } catch { /* best effort */ }
 
+// Keep the machine awake while the workshop is open (task 14 B1). Held only for
+// this daemon's lifetime; caffeinate itself exits when we do.
+const caffeination = keepAwake({ enabled: !noCaffeinate });
+
 process.on('SIGUSR2', () => { pairing.resetPairing(); reissuePairing(); });
-process.on('SIGINT', () => { ws.close(); server.close(); try { if (existsSync(pidPath)) writeFileSync(pidPath, ''); } catch { /* ignore */ } process.exit(0); });
+process.on('SIGINT', () => { caffeination.stop(); ws.close(); server.close(); try { if (existsSync(pidPath)) writeFileSync(pidPath, ''); } catch { /* ignore */ } process.exit(0); });
 
 // Port already held → recompute preflight (port fails), report it, exit clean.
 server.on('error', (e: NodeJS.ErrnoException) => {
@@ -193,6 +199,7 @@ server.listen(port, () => {
   console.log(`  hook:     ${install.changed ? 'installed into' : 'already present in'} ${install.path}`);
   console.log(`  ws:       ws://…:${port}/ws  (session-token auth)`);
   console.log(`  narration: ${narrationKeys.hasKey() ? 'BYOK key set — Haiku live' : 'templates only (no key)'}`);
+  console.log(`  awake:    ${caffeination.note}`);
   if (recovered) console.log(`  recovery: ${recovered} orphaned decision(s) superseded after restart`);
   if (devMode) console.log(`  dev mode: ON (/dev/* endpoints enabled)`);
   // Preflight: one line per check, so a broken dependency is obvious in the terminal too.

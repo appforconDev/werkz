@@ -48,16 +48,18 @@ Widget _screen(
   bool paired = true,
   Preflight? preflight,
   WorkOrderStatus workOrder = const WorkOrderStatus(),
+  bool unreachable = false,
 }) {
   return ProviderScope(
     overrides: [
       secureStorageProvider.overrideWithValue(GoldenStorage(paired ? pairedStore() : {})),
       daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
       workshopProvider.overrideWith(() => _SeededWorkshop(WorkshopState(
-            conn: ConnState.connected,
+            conn: unreachable ? ConnState.connecting : ConnState.connected,
             pending: pending,
             preflight: preflight,
             workOrder: workOrder,
+            unreachable: unreachable,
           ))),
     ],
     child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: child),
@@ -97,6 +99,11 @@ void main() {
     await pumpGolden(t, name: 'home_work_order',
         app: _screen(const HomeScreen(),
             workOrder: const WorkOrderStatus(phase: WorkOrderPhase.inProgress)));
+  });
+
+  testWidgets('home_unreachable', (t) async {
+    await pumpGolden(t, name: 'home_unreachable',
+        app: _screen(const HomeScreen(), unreachable: true));
   });
 
   testWidgets('settings', (t) async {

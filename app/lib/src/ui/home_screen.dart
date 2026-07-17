@@ -77,6 +77,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Column(
             children: [
               Container(color: Werkz.machine, child: SafeArea(bottom: false, child: _StatusBar(ws: ws))),
+              if (ws.unreachable) const _UnreachableBanner(),
               if (showPreflight) _PreflightBanner(preflight: pf),
               if (ws.autopilot) const _AutopilotBanner(),
               if (ws.workOrder.phase != WorkOrderPhase.idle) _WorkOrderStrip(status: ws.workOrder),
@@ -127,11 +128,13 @@ class _StatusBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final (label, color) = switch (ws.conn) {
-      ConnState.connected => ('WORKSHOP OPEN', Werkz.approvalGreen),
-      ConnState.connecting => ('CONNECTING…', Werkz.steel),
-      ConnState.disconnected => ('WORKSHOP CLOSED', Werkz.stampRed),
-    };
+    final (label, color) = ws.unreachable
+        ? ('WORKSHOP UNREACHABLE', Werkz.stampRed)
+        : switch (ws.conn) {
+            ConnState.connected => ('WORKSHOP OPEN', Werkz.approvalGreen),
+            ConnState.connecting => ('CONNECTING…', Werkz.steel),
+            ConnState.disconnected => ('WORKSHOP CLOSED', Werkz.stampRed),
+          };
     return InkWell(
       onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
       child: Container(
@@ -148,6 +151,42 @@ class _StatusBar extends ConsumerWidget {
             const Icon(Icons.settings, color: Werkz.steel, size: 16),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Unreachable banner (task 14 B3): the daemon stopped answering across several
+// reconnect attempts. Name the likely causes instead of a silent dead screen —
+// the machine running the workshop must be on and awake.
+class _UnreachableBanner extends StatelessWidget {
+  const _UnreachableBanner();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      color: Werkz.stampRed,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.cloud_off, color: Colors.white, size: 16),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text('WORKSHOP UNREACHABLE — is the machine asleep?',
+                  style: TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+            ),
+          ]),
+          SizedBox(height: 4),
+          Text('• The computer running the workshop may be asleep or off\n'
+              '• Your phone may be on a different network than the machine\n'
+              '• The workshop (npx werkz) may have been stopped',
+              style: TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontSize: 10, height: 1.5)),
+          SizedBox(height: 3),
+          Text('Reconnecting automatically the moment it answers.',
+              style: TextStyle(fontFamily: Werkz.mono, color: Colors.white70, fontSize: 10)),
+        ],
       ),
     );
   }

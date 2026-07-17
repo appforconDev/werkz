@@ -1,5 +1,44 @@
 ---
 import '../styles/global.css';
+
+// werkz.app landing (static-first, CLAUDE.md stack rule). 1955 industrial
+// bureaucracy voice: requisitions, stamps, departments — never clownish.
+const steps = [
+  { n: '1', label: 'YOUR TERMINAL', body: 'Claude Code does the work in your project, on your machine.' },
+  { n: '2', label: 'THE DAEMON', body: 'npx werkz runs beside it, turning permission prompts into requisitions.' },
+  { n: '3', label: 'YOUR PHONE', body: 'You stamp each requisition with a swipe — approve or deny, wherever you are.' },
+];
+
+const faqs = [
+  {
+    q: 'Does my computer need to be on?',
+    a: 'Yes. The workshop runs where your code does — on your machine, not our servers. ' +
+       'Claude Code and the Werkz daemon both live there, so for a decision to reach your ' +
+       'phone the machine must be on and awake. On macOS the workshop holds the machine ' +
+       'awake while it is open (a caffeinate assertion). Most of our users run always-on ' +
+       'machines; if that is you, nothing to think about.',
+  },
+  {
+    q: 'What happens when it sleeps?',
+    a: 'If the machine sleeps, the workshop goes quiet: your phone shows WORKSHOP UNREACHABLE ' +
+       'and names the likely cause rather than staring blankly. Held decisions and pending ' +
+       'requisitions survive on the machine — the moment it wakes, your phone reconnects and ' +
+       'the queue is exactly where you left it. Note: closing a laptop lid still sleeps the ' +
+       'machine unless it is plugged in and configured to stay awake.',
+  },
+  {
+    q: 'Free versus paid?',
+    a: 'Free: phone and machine on the same wi-fi, paired by QR, unlimited within one workshop. ' +
+       'Paid (Foreman): reach your workshop from anywhere over a secure relay, plus multiple ' +
+       'workshops at once. Your agent keys and code never pass through us.',
+  },
+  {
+    q: 'Can you host it for me?',
+    a: 'Not yet — but it is on the plan. Cloud Workshop is a coming tier where we run the ' +
+       'daemon (and Claude Code) on a managed machine for you, so nothing on your desk has to ' +
+       'stay awake. Join the waitlist and we will call you in when the department opens.',
+  },
+];
 ---
 
 <html lang="en">
@@ -7,12 +46,64 @@ import '../styles/global.css';
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>WERKZ INDUSTRIES — Est. 1955</title>
+    <meta name="description" content="A mobile game layer for agentic coding. Your coding agents become workers in a workshop you run from your phone." />
   </head>
-  <body class="bg-[#F2E8D0] text-[#2E3134] min-h-screen grid place-items-center">
-    <main class="text-center space-y-4 p-8">
-      <h1 class="text-3xl font-bold tracking-[0.3em]">WERKZ INDUSTRIES</h1>
-      <p class="tracking-widest text-sm">DEPARTMENT OF AGENT OPERATIONS</p>
-      <p class="text-sm">The workshop is under construction. Form 17-B pending.</p>
+  <body class="bg-[#F2E8D0] text-[#2E3134] min-h-screen font-mono">
+    <main class="mx-auto max-w-2xl px-6 py-16 space-y-16">
+
+      <header class="text-center space-y-2">
+        <h1 class="text-3xl font-black tracking-[0.3em]">WERKZ INDUSTRIES</h1>
+        <p class="tracking-[0.25em] text-xs text-[#5A5A52]">DEPARTMENT OF AGENT OPERATIONS · EST. 1955</p>
+        <p class="pt-4 text-sm leading-relaxed">
+          Your coding agents become workers in a workshop you run from your phone.
+          Permission prompts arrive as requisitions. You stamp them with a swipe.
+        </p>
+      </header>
+
+      <!-- How it works -->
+      <section class="space-y-6">
+        <h2 class="text-center text-sm tracking-[0.25em] border-y-2 border-[#2E3134] py-2">— HOW IT WORKS —</h2>
+
+        <div class="grid gap-3 sm:grid-cols-3">
+          {steps.map((s) => (
+            <div class="bg-[#E4D2A8] border-2 border-[#2E3134] p-4 space-y-2">
+              <div class="flex items-center gap-2">
+                <span class="grid place-items-center w-6 h-6 rounded-full bg-[#2E3134] text-[#F2E8D0] text-xs font-bold">{s.n}</span>
+                <span class="text-xs font-black tracking-widest">{s.label}</span>
+              </div>
+              <p class="text-xs leading-relaxed text-[#3A3A34]">{s.body}</p>
+            </div>
+          ))}
+        </div>
+
+        <p class="text-center text-xs tracking-widest text-[#5A5A52]">
+          TERMINAL → DAEMON → PHONE
+        </p>
+
+        <div class="bg-[#2E3134] text-[#F2E8D0] p-4 text-xs leading-relaxed space-y-1">
+          <p><span class="text-[#4E9A5A] font-bold">FREE</span> — phone and machine on the same wi-fi, paired by QR.</p>
+          <p><span class="text-[#C24A3A] font-bold">FOREMAN</span> — reach your workshop from anywhere over a secure relay.</p>
+          <p class="pt-1 text-[#B8B4A8]">Either way, the workshop runs on your machine — so it must be on and awake.</p>
+        </div>
+      </section>
+
+      <!-- FAQ -->
+      <section class="space-y-4">
+        <h2 class="text-center text-sm tracking-[0.25em] border-y-2 border-[#2E3134] py-2">— NOTICE OF FREQUENTLY ASKED QUESTIONS —</h2>
+        <dl class="space-y-4">
+          {faqs.map((f) => (
+            <div class="border-l-4 border-[#2E3134] pl-4">
+              <dt class="text-sm font-black">{f.q}</dt>
+              <dd class="pt-1 text-xs leading-relaxed text-[#3A3A34]">{f.a}</dd>
+            </div>
+          ))}
+        </dl>
+      </section>
+
+      <footer class="text-center text-xs text-[#5A5A52] tracking-widest border-t-2 border-[#2E3134] pt-6">
+        WERKZ INDUSTRIES · FORM 17-B PENDING · ALL REQUISITIONS FINAL
+      </footer>
+
     </main>
   </body>
 </html>

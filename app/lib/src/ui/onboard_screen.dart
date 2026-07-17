@@ -63,6 +63,40 @@ class OnboardScreen extends StatelessWidget {
                     'auto / bypass, the workshop is bypassed and the app will warn you.',
                     style: TextStyle(fontFamily: Werkz.mono, fontSize: 13, height: 1.4)),
               ),
+              const SizedBox(height: 20),
+              // Always-on honesty (task 14 A): the workshop runs on the user's
+              // machine, not our servers. State it plainly — no apology.
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(color: Werkz.manila, border: Border.all(color: Werkz.gunmetal, width: 2)),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Icon(Icons.desktop_windows, size: 16, color: Werkz.machine),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text('THE WORKSHOP LIVES ON YOUR COMPUTER',
+                            style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1, color: Werkz.machine)),
+                      ),
+                    ]),
+                    SizedBox(height: 8),
+                    Text(
+                      'Werkz runs where your code does — on your machine, not our '
+                      'servers. For decisions and dispatches while you are away from '
+                      'your desk, that machine must be on and awake.',
+                      style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, height: 1.5, color: Werkz.machine),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'On macOS, the workshop holds the machine awake while it is '
+                      'open (closing the lid still sleeps it unless it is plugged in). '
+                      'Hosting it for you — Cloud Workshop — is a planned tier.',
+                      style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, height: 1.5, color: Werkz.gunmetal),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
               FilledButton(
                 style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),

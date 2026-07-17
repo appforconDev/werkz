@@ -90,6 +90,9 @@ class WorkshopState {
   final String? narrationLast4;
   final Preflight? preflight; // daemon startup diagnostics (null until first welcome)
   final WorkOrderStatus workOrder;
+  // Daemon unreachable across several reconnect attempts (machine asleep /
+  // off-network / daemon stopped). Never a silent dead screen (task 14 B3).
+  final bool unreachable;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -102,6 +105,7 @@ class WorkshopState {
     this.narrationLast4,
     this.preflight,
     this.workOrder = const WorkOrderStatus(),
+    this.unreachable = false,
   });
 
   WorkshopState copyWith({
@@ -115,6 +119,7 @@ class WorkshopState {
     String? narrationLast4,
     Preflight? preflight,
     WorkOrderStatus? workOrder,
+    bool? unreachable,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -127,6 +132,7 @@ class WorkshopState {
         narrationLast4: narrationLast4 ?? this.narrationLast4,
         preflight: preflight ?? this.preflight,
         workOrder: workOrder ?? this.workOrder,
+        unreachable: unreachable ?? this.unreachable,
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -177,7 +183,11 @@ class WorkshopController extends Notifier<WorkshopState> {
     // Guard every callback: the notifier may be disposed (provider rebuilt,
     // widget gone) while a socket event is in flight.
     client.onState = (c) {
-      if (!_disposed) state = state.copyWith(conn: c);
+      // A live/connected state also means we're reachable again.
+      if (!_disposed) state = state.copyWith(conn: c, unreachable: c == ConnState.connected ? false : null);
+    };
+    client.onReachability = (unreachable) {
+      if (!_disposed) state = state.copyWith(unreachable: unreachable);
     };
     client.onWelcome = (pending, autopilot, mode, preflight) {
       if (_disposed) return;
