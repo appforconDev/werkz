@@ -91,33 +91,59 @@ class WorkshopState {
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
 }
 
+// Seam for testing: how a DaemonClient is built for a pairing. Overridable so a
+// test can inject a client that fires callbacks synchronously (the exact shape
+// of the first-real-device pairing crash).
+typedef DaemonClientBuilder = DaemonClient Function(StoredPairing p);
+
+final daemonClientBuilderProvider = Provider<DaemonClientBuilder>(
+  (_) => (p) => DaemonClient(payload: p.payload, sessionToken: p.sessionToken),
+);
+
 final workshopProvider =
     NotifierProvider<WorkshopController, WorkshopState>(WorkshopController.new);
 
 class WorkshopController extends Notifier<WorkshopState> {
   DaemonClient? _client;
+  bool _disposed = false;
   static const _feedCap = 200;
 
   @override
   WorkshopState build() {
-    ref.onDispose(() => _client?.dispose());
+    _disposed = false;
+    ref.onDispose(() {
+      _disposed = true;
+      _client?.dispose();
+      _client = null;
+    });
     final pairing = ref.watch(pairingControllerProvider).asData?.value;
     if (pairing != null) {
-      _connect(pairing);
+      // Never start work that can call back into `state` during build() — that
+      // is a circular read and crashes on first pair. Defer connection start to
+      // a microtask, after this build() has returned and the provider is
+      // initialized.
+      Future.microtask(() {
+        if (!_disposed) _connect(pairing);
+      });
     }
     return const WorkshopState();
   }
 
   void _connect(StoredPairing p) {
+    if (_disposed) return;
     _client?.dispose();
-    final client = DaemonClient(payload: p.payload, sessionToken: p.sessionToken);
+    final client = ref.read(daemonClientBuilderProvider)(p);
+    // Guard every callback: the notifier may be disposed (provider rebuilt,
+    // widget gone) while a socket event is in flight.
     client.onState = (c) {
-      state = state.copyWith(conn: c);
+      if (!_disposed) state = state.copyWith(conn: c);
     };
     client.onWelcome = (pending, autopilot, mode) {
-      state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode);
+      if (!_disposed) state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode);
     };
-    client.onEvent = _handleEvent;
+    client.onEvent = (e) {
+      if (!_disposed) _handleEvent(e);
+    };
     _client = client;
     client.connect();
   }

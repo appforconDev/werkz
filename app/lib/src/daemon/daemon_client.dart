@@ -50,12 +50,24 @@ class DaemonClient {
   }
 
   void _setState(ConnState s) {
+    if (state == s) return;
     state = s;
     onState?.call(s);
   }
 
+  // Notify without ever calling back synchronously within connect()/_open —
+  // the first state change must land on a later microtask so a listener
+  // reading its own state during construction can't re-enter.
+  void _setStateAsync(ConnState s) {
+    if (state == s) return;
+    state = s;
+    scheduleMicrotask(() {
+      if (!_closed || s == ConnState.disconnected) onState?.call(s);
+    });
+  }
+
   void _open() {
-    _setState(ConnState.connecting);
+    _setStateAsync(ConnState.connecting); // never synchronous within connect()
     try {
       final ch = WebSocketChannel.connect(Uri.parse(payload.wsUrl(sessionToken)));
       _ch = ch;
