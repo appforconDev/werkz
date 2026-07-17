@@ -1,0 +1,27 @@
+{
+  "name": "werkz",
+  "version": "0.0.1",
+  "description": "WERKZ INDUSTRIES — Department of Agent Operations. The workshop opens soon.",
+  "type": "module",
+  "bin": {
+    "werkz": "cli.mjs"
+  },
+  "files": [
+    "cli.mjs"
+  ],
+  "license": "MIT",
+  "homepage": "https://werkz.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appforconDev/werkz.git"
+  },
+  "keywords": [
+    "werkz",
+    "claude-code",
+    "agentic-coding",
+    "coding-agents",
+    "game",
+    "workshop",
+    "daemon"
+  ]
+}
