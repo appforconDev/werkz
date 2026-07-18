@@ -18,20 +18,21 @@ WorkerState workerStateForStatus(WorkerStatus s) => switch (s) {
       WorkerStatus.coffee => WorkerState.maintenance,
     };
 
-/// The fixed persona roster + their per-room reading offsets (task 19l). A
-/// worker's STARTING room distributes the roster so the factory reads populated:
-/// Bolt on the floor, Checkwell in the archive, Sparkhand on the floor.
+/// The fixed persona roster + their per-room reading offsets (task 19l). Each has
+/// a HOME room (task 20b): it starts there, and returns there once idle so no one
+/// stands around covering another's work spot. Checkwell keeps the archive, Bolt
+/// + Sparkhand the floor.
 class PersonaSpec {
   final String id; // stable persona id, e.g. 'WX-7A19'
   final String folder; // asset folder, e.g. '7a19'
-  final String startRoom;
+  final String homeRoom; // start + return-to room
   final double heightScale; // 19l per-persona height offset
   final double homeXFrac; // resting slot on the band
-  const PersonaSpec(this.id, this.folder, this.startRoom, this.heightScale, this.homeXFrac);
+  const PersonaSpec(this.id, this.folder, this.homeRoom, this.heightScale, this.homeXFrac);
 }
 
 const kRoster = <PersonaSpec>[
-  PersonaSpec('WX-3C57', '3c57', 'archive', 1.18, 0.30), // Checkwell — tall-thin
+  PersonaSpec('WX-3C57', '3c57', 'archive', 1.18, 0.30), // Checkwell — tall-thin inspector
   PersonaSpec('WX-7A19', '7a19', 'workshop-floor', 1.0, 0.50), // Bolt — primary
   PersonaSpec('WX-9B72', '9b72', 'workshop-floor', 0.90, 0.82), // Sparkhand — squat
 ];
@@ -128,7 +129,7 @@ class WorkerModelState {
   static WorkerModelState initial() => WorkerModelState(
         workers: [
           for (final p in kRoster)
-            WorkerAgent(personaId: p.id, currentRoom: p.startRoom, status: WorkerStatus.idle),
+            WorkerAgent(personaId: p.id, currentRoom: p.homeRoom, status: WorkerStatus.idle),
         ],
       );
 }
@@ -141,7 +142,31 @@ typedef Ingest = ({WorkerModelState state, String? warning});
 /// (round-robin) takes a starting job; if none are free the job queues FIFO and
 /// is taken when a worker frees. Activity routes to the job's worker (or the
 /// primary for un-jobbed interactive activity). Unroutable job events warn loud.
+/// After routing, any idle worker away from home heads home (task 20b) so no one
+/// covers another's spot — the currentRoom change is walked out by the transit.
 Ingest ingestWorkerEvent(WorkerModelState st, WerkzEvent e) {
+  final r = _ingestCore(st, e);
+  return (state: _returnHomeWhenIdle(r.state), warning: r.warning);
+}
+
+/// After a completed interaction (job done → over coffee) a worker with no job
+/// that finished away from its home room heads home (logical move; the transit
+/// layer walks it), so nobody stands idle covering another's spot. Fires from
+/// COFFEE only — an idle worker mid-activity (e.g. the primary drafting in the
+/// advisor office) is left where it is until its job winds down.
+WorkerModelState _returnHomeWhenIdle(WorkerModelState st) {
+  List<WorkerAgent>? workers;
+  for (var i = 0; i < st.workers.length; i++) {
+    final w = st.workers[i];
+    if (w.jobId == null && w.status == WorkerStatus.coffee && w.currentRoom != personaSpec(w.personaId).homeRoom) {
+      workers ??= [...st.workers];
+      workers[i] = w._to(room: personaSpec(w.personaId).homeRoom);
+    }
+  }
+  return workers == null ? st : st._with(workers: workers);
+}
+
+Ingest _ingestCore(WorkerModelState st, WerkzEvent e) {
   final jobId = jobIdForEvent(e);
   final room = roomForEvent(e);
 

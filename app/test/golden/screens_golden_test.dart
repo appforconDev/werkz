@@ -126,6 +126,19 @@ void main() {
             workOrder: const WorkOrderStatus(phase: WorkOrderPhase.inProgress)));
   });
 
+  // The work-order toast moved to the top edge (task 20b) — shipping UI, so verify
+  // multi-device it clears the WERKZ header/status chip and never covers a floor.
+  testWidgets('home_work_order_se', (t) async {
+    await pumpGolden(t, name: 'home_work_order_se', device: deviceSE,
+        app: _screen(const HomeScreen(),
+            workOrder: const WorkOrderStatus(phase: WorkOrderPhase.inProgress)));
+  });
+  testWidgets('home_work_order_promax', (t) async {
+    await pumpGolden(t, name: 'home_work_order_promax', device: deviceProMax,
+        app: _screen(const HomeScreen(),
+            workOrder: const WorkOrderStatus(phase: WorkOrderPhase.inProgress)));
+  });
+
   testWidgets('home_unreachable', (t) async {
     await pumpGolden(t, name: 'home_unreachable',
         app: _screen(const HomeScreen(), unreachable: true));

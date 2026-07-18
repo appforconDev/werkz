@@ -13,9 +13,9 @@ WerkzEvent ev(String type, {String? jobId, String? room, String? source, String?
       severity: 'info',
       workerId: worker,
       payload: {
-        if (jobId != null) 'jobId': jobId,
-        if (room != null) 'room': room,
-        if (source != null) 'source': source,
+        'jobId': ?jobId,
+        'room': ?room,
+        'source': ?source,
       },
     );
 
@@ -66,13 +66,26 @@ void main() {
 
     test('a completed job with an empty queue leaves the worker over coffee, available', () {
       var st = WorkerModelState.initial();
-      st = feed(st, [ev('job.assigned', jobId: 'j1')]);
+      st = feed(st, [ev('job.assigned', jobId: 'j1', room: 'workshop-floor')]);
       final w = st.forJob('j1')!.personaId;
       st = feed(st, [ev('job.completed', jobId: 'j1')]);
       final a = st.forPersona(w)!;
       expect(a.jobId, isNull);
       expect(a.status, WorkerStatus.coffee);
       expect(a.available, isTrue);
+    });
+
+    test('after a job away from home, an idle worker returns to its home room (task 20b)', () {
+      var st = WorkerModelState.initial();
+      // round-robin hands j1 to the first roster worker, Checkwell (home = archive)
+      st = feed(st, [ev('job.assigned', jobId: 'j1', room: 'workshop-floor')]);
+      final c = st.forJob('j1')!;
+      expect(c.personaId, 'WX-3C57');
+      expect(c.currentRoom, 'workshop-floor'); // walked out to the job
+      st = feed(st, [ev('job.completed', jobId: 'j1')]);
+      final home = st.forPersona('WX-3C57')!;
+      expect(home.jobId, isNull);
+      expect(home.currentRoom, 'archive', reason: 'returns to its post, not lingering on the floor');
     });
   });
 

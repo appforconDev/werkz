@@ -11,11 +11,13 @@ import 'worker_sprite.dart';
 /// The five contract animations, mapped 1:1 from WorkerState.
 enum WorkerAnim { idle, walk, workTyping, carryWalk, coffeeIdle }
 
-/// Debug-panel state forcer (task 19j). Real dispatches finish in seconds, too
-/// fast to tune against — this pins a state so Rickard can drag sliders against a
-/// sustained animation. `auto` follows real events (default, shipping behaviour);
-/// `walkLoop` patrols desk↔coffee forever; the rest loop their anim in place.
-enum ForcedSkelState { auto, idle, walkLoop, workTyping, coffeeIdle }
+/// Debug-panel state forcer (task 19j, +20b). Real dispatches finish in seconds,
+/// too fast to tune against — this pins a state so Rickard can drag sliders
+/// against a sustained animation. `auto` follows real events (default, shipping
+/// behaviour); `walkLoop` patrols desk↔coffee within a room; `transitPatrol`
+/// (20b) sends the worker across ROOMS forever to tune inter-room transit; the
+/// rest loop their anim in place.
+enum ForcedSkelState { auto, idle, walkLoop, workTyping, coffeeIdle, transitPatrol }
 
 WorkerAnim animForState(WorkerState s) => switch (s) {
       WorkerState.idle => WorkerAnim.idle,

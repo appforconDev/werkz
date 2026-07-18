@@ -89,10 +89,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final tuning = ref.watch(layoutTuningProvider);
     final tuningVisible = kDebugMode && ref.watch(layoutTuningPanelVisibleProvider);
 
-    // Bottom bar total height (content + pad + home-indicator inset + top
-    // border) so the floating work-order strip can sit just above it.
-    final barHeight = tuning.bottomBarHeight + tuning.bottomBarPad + MediaQuery.of(context).viewPadding.bottom + 2;
-
     // Start the auto-dismiss countdown when a work order reaches COMPLETED.
     ref.listen<WorkshopState>(workshopProvider, (prev, next) {
       if (prev?.workOrder.phase != next.workOrder.phase) {
@@ -131,13 +127,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Debug layout tuning — a compact draggable overlay that self-positions
           // (docks top/bottom, collapses) so the rooms scroll underneath (task 17b).
           if (tuningVisible) const LayoutTuningPanel(),
-          // Work-order status floats ABOVE the bottom bar as an overlay — it must
-          // never reflow the room stack when appearing/dismissing (task 16 B2).
+          // Work-order status floats just BELOW the status bar as an overlay
+          // (task 20b: moved off the Archive floor band). Still an overlay so it
+          // never reflows the room stack (task 16 B2); it clears the WERKZ header
+          // + status chip by sitting under the whole status-bar row.
           if (ws.workOrder.phase != WorkOrderPhase.idle)
             Positioned(
               left: 0,
               right: 0,
-              bottom: barHeight,
+              top: MediaQuery.of(context).viewPadding.top + tuning.appBarTopGap + 26,
               child: _WorkOrderStrip(
                 status: ws.workOrder,
                 onDismiss: () {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
 import '../../state/skel_tuning.dart';
+import '../../state/transit_provider.dart';
 import '../../state/worker_model_provider.dart';
 import '../theme.dart';
 
@@ -200,6 +201,18 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('head bob', sp.headBob, 0, 0.3, (v) => spc.update(sp.copyWith(headBob: v)), decimals: 2),
       _slider('type hz', sp.typeHz, 1, 6, (v) => spc.update(sp.copyWith(typeHz: v))),
       _slider('type swing', sp.typeSwing, 0, 1, (v) => spc.update(sp.copyWith(typeSwing: v)), decimals: 2),
+      ..._transitSliders(),
+    ];
+  }
+
+  // Inter-room transit tuning (task 20b): beat = off-view pause (scales with room
+  // distance); edge margin = how far past the edge the worker steps before the beat.
+  List<Widget> _transitSliders() {
+    final tp = ref.watch(transitParamsProvider);
+    final tpc = ref.read(transitParamsProvider.notifier);
+    return [
+      _slider('transit beat', tp.beatSec, 0, 2, (v) => tpc.update(tp.copyWith(beatSec: v)), decimals: 2),
+      _slider('edge margin', tp.edgeMargin, 0, 0.5, (v) => tpc.update(tp.copyWith(edgeMargin: v)), decimals: 2),
     ];
   }
 
@@ -209,6 +222,7 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
     ForcedSkelState.auto: 'AUTO',
     ForcedSkelState.idle: 'IDLE',
     ForcedSkelState.walkLoop: 'WALK',
+    ForcedSkelState.transitPatrol: 'PATROL',
     ForcedSkelState.workTyping: 'TYPE',
     ForcedSkelState.coffeeIdle: 'COFFEE',
   };

@@ -1,8 +1,11 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
 import '../../state/skel_tuning.dart';
+import '../../state/transit_provider.dart';
+import '../../world/room_registry.dart';
 import '../../world/worker_layer.dart';
 import '../theme.dart';
 
@@ -60,6 +63,7 @@ class StackedWorkshop extends ConsumerWidget {
             padding: EdgeInsets.only(bottom: scrollPadding),
             child: Column(
               children: [
+                if (showWorker) const _TransitClock(), // one clock drives all transits (task 20b)
                 for (var i = 0; i < order.length; i++) ...[
                   // Explicit, IDENTICAL treatment at every seam (task 15 C3): a
                   // steel bar with a lit top edge. Height is per-seam tunable.
@@ -76,9 +80,16 @@ class StackedWorkshop extends ConsumerWidget {
                       // room (task 20a) — feet on the floor band a touch above
                       // the seam. A worker teleports between rooms until 20b.
                       if (!showWorker) return panel;
+                      final rd = roomDef(order[i].$1); // band geometry from the room registry (task 20b)
                       return Stack(children: [
                         Positioned.fill(child: panel),
-                        Positioned(left: 0, right: 0, bottom: 4, height: 160, child: WorkerLayer(room: order[i].$1)),
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: rd?.bandBottom ?? 4,
+                          height: rd?.bandHeight ?? 160,
+                          child: WorkerLayer(room: order[i].$1),
+                        ),
                       ]);
                     }(),
                   ),
@@ -90,6 +101,39 @@ class StackedWorkshop extends ConsumerWidget {
       ),
     );
   }
+}
+
+// One ticker for the whole building's transits (task 20b): advances the visual
+// transit state each frame so a worker's edge-walk plays out. Mounted once, only
+// with the debug worker flag on; zero size.
+class _TransitClock extends ConsumerStatefulWidget {
+  const _TransitClock();
+  @override
+  ConsumerState<_TransitClock> createState() => _TransitClockState();
+}
+
+class _TransitClockState extends ConsumerState<_TransitClock> with SingleTickerProviderStateMixin {
+  Ticker? _ticker;
+  Duration _last = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((elapsed) {
+      final dt = (elapsed - _last).inMicroseconds / 1e6;
+      _last = elapsed;
+      if (dt > 0 && dt < 0.1) ref.read(transitProvider.notifier).advance(dt);
+    })..start();
+  }
+
+  @override
+  void dispose() {
+    _ticker?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 // A uniform steel floor slab between storeys (task 15 C3).
