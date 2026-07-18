@@ -12,6 +12,13 @@
     { "id": "06-room-advisors-office", "prompt": "anchors/06-room-advisors-office.txt", "image_size": "landscape_16_9" },
     { "id": "06b-room-advisors-office-idle", "prompt": "anchors/06b-room-advisors-office-idle.txt", "image_size": "landscape_16_9" },
     { "id": "07-decision-overlay", "prompt": "anchors/07-decision-overlay.txt", "image_size": "portrait_16_9" },
-    { "id": "08-worker-sprites", "prompt": "anchors/08-worker-sprites.txt", "image_size": "landscape_4_3" }
+    { "id": "08-worker-sprites", "prompt": "anchors/08-worker-sprites.txt", "image_size": "landscape_4_3" },
+
+    { "id": "sprite-7a19-turnaround", "prompt": "anchors/sprite-7a19-turnaround.txt", "image_size": "landscape_4_3", "num_images": 2 },
+    { "id": "sprite-7a19-poses", "prompt": "anchors/sprite-7a19-poses.txt", "image_size": "landscape_4_3", "num_images": 2 },
+    { "id": "sprite-3c57-turnaround", "prompt": "anchors/sprite-3c57-turnaround.txt", "image_size": "landscape_4_3", "num_images": 2 },
+    { "id": "sprite-3c57-poses", "prompt": "anchors/sprite-3c57-poses.txt", "image_size": "landscape_4_3", "num_images": 2 },
+    { "id": "sprite-9b72-turnaround", "prompt": "anchors/sprite-9b72-turnaround.txt", "image_size": "landscape_4_3", "num_images": 2 },
+    { "id": "sprite-9b72-poses", "prompt": "anchors/sprite-9b72-poses.txt", "image_size": "landscape_4_3", "num_images": 2 }
   ]
 }

@@ -68,6 +68,27 @@ Rules:
 - **Octagon audience benches are populated by worker SPRITES at runtime**
   (your actual workers watching the match) — never painted-in.
 
+## Sprite pose canon (task 18, 2026-07-18)
+
+- **Silhouettes are LOCKED** to the personnel file (`../approved/08-worker-sprites.png`):
+  WX-7A19 = ROUND generalist (dome/hard-hat, tool belt), WX-3C57 = TALL-THIN
+  inspector (visor, clipboard, tie), WX-9B72 = SQUAT-WIDE brute (goggles, leather
+  apron/gloves). The three body plans must stay instantly distinguishable AS BLACK
+  SHADOWS at small size — this is a hard gate, tested in the pipeline via
+  `silhouette.mjs` (threshold to pure black; proofs kept as `_silhouette-*.png`).
+- **Approved pose reference** lives in `../approved/sprites/`: per persona a
+  TURNAROUND sheet (side / 3-4 / front) and a side-view POSE sheet of six labelled
+  poses (idle-stand, walk-contact, walk-passing, work-typing, work-carry,
+  maintenance-coffee). Prompts saved alongside as `*.prompt.txt`; manifest jobs
+  are `sprite-*`. These are the ANIMATION-PIPELINE INPUT, not final sprite sheets.
+- **Rendering:** flat painterly game-art (never photorealistic), palette from the
+  anchor, machine grays + brass, warm tungsten rim light matching the room art so
+  sprites sit IN the rooms. Cross-pose consistency (the same robot in every pose)
+  outranks any single pose being pretty — it is gpt-image-2's known weakness.
+- Generation weakness noted: a true left-facing PROFILE is unreliable from
+  gpt-image-2 (the "SIDE" turnaround view often reads front-ish). Fine for the
+  pose-approval gate; the rigger/animator works from the full set.
+
 Other files: `NN-*.txt` are the P0 concept-art run prompts (rooms, decision
 overlay, worker sprites), driven by `../manifest.json` via `../generate.mjs`.
 Approved canonical concept art lives in `../approved/`.
