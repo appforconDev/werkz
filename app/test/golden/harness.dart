@@ -19,6 +19,19 @@ import 'package:werkz_app/src/models/pairing_payload.dart';
 
 const iphone12 = Size(390, 844);
 
+// Device presets for multi-device goldens (task 18 A). Insets in logical px
+// (== physical at dpr 1.0). SE has a status bar but no notch/home-indicator.
+class GoldenDevice {
+  final Size size;
+  final double top;
+  final double bottom;
+  const GoldenDevice(this.size, this.top, this.bottom);
+}
+
+const deviceSE = GoldenDevice(Size(375, 667), 20, 0);     // iPhone SE (2/3rd gen)
+const device12 = GoldenDevice(Size(390, 844), 47, 34);    // iPhone 12
+const deviceProMax = GoldenDevice(Size(430, 932), 59, 34); // iPhone 15 Pro Max
+
 /// A daemon client that never opens a socket.
 class GoldenClient extends DaemonClient {
   GoldenClient(PairingPayload p, String s) : super(payload: p, sessionToken: s);
@@ -51,9 +64,10 @@ Future<void> pumpGolden(
   WidgetTester tester, {
   required Widget app,
   required String name,
+  GoldenDevice device = device12,
   Duration settle = const Duration(milliseconds: 700),
 }) async {
-  await pumpGoldenApp(tester, app: app, settle: settle);
+  await pumpGoldenApp(tester, app: app, device: device, settle: settle);
   await expectGolden(tester, name);
 }
 
@@ -62,14 +76,15 @@ Future<void> pumpGolden(
 Future<void> pumpGoldenApp(
   WidgetTester tester, {
   required Widget app,
+  GoldenDevice device = device12,
   Duration settle = const Duration(milliseconds: 700),
 }) async {
   tester.view.devicePixelRatio = 1.0;
-  tester.view.physicalSize = iphone12; // logical == physical at dpr 1.0
-  // Real iPhone-12 safe-area insets set ON THE VIEW so MediaQuery.fromView (which
+  tester.view.physicalSize = device.size; // logical == physical at dpr 1.0
+  // Real safe-area insets set ON THE VIEW so MediaQuery.fromView (which
   // MaterialApp builds internally) actually reports them. This is the fix.
-  tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
-  tester.view.viewPadding = const FakeViewPadding(top: 47, bottom: 34);
+  tester.view.padding = FakeViewPadding(top: device.top, bottom: device.bottom);
+  tester.view.viewPadding = FakeViewPadding(top: device.top, bottom: device.bottom);
   addTearDown(tester.view.reset);
 
   await tester.pumpWidget(app);

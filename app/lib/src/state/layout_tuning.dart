@@ -15,8 +15,14 @@ import 'providers.dart' show secureStorageProvider;
 // HISTORY: the advisor once used fitHeight to reveal a WERKZ plate baked below
 // its floor line — but that plate was cropped from the asset in 17f (signage is
 // the corner chips now), so ALL rooms default to cover. The toggle stays for
-// debug experiments. Per-room slot heights set each storey's vertical space; the
-// stack scrolls when the storeys exceed the viewport.
+// debug experiments.
+//
+// HEIGHTS ARE RATIOS (task 18 A). Rickard tuned the storeys on-device (iPhone 12)
+// to advisor 241 : workshop 220 : archive 204. Those are stored as RATIO WEIGHTS,
+// not absolute pixels: StackedWorkshop distributes the available content height in
+// that proportion, so the same proportions fill an SE, a 12, or a Pro Max. A
+// per-room floor (`roomMinHeight`) means a small screen degrades to SCROLL rather
+// than squishing a storey below readability.
 enum RoomFit { cover, fitHeight }
 class LayoutTuning {
   final double appBarTopGap;     // status-bar row top padding, below the notch inset
@@ -28,14 +34,16 @@ class LayoutTuning {
   final double alignAdvisorY;    // X-pan (fitHeight) or Y-band (cover), -1..1
   final double alignWorkshopY;
   final double alignArchiveY;
-  final double advisorHeight;    // per-room slot heights — how much vertical space
+  final double advisorHeight;    // RATIO WEIGHT (not px) — see class note (task 18 A)
   final double workshopHeight;
   final double archiveHeight;
+  final double roomMinHeight;    // per-storey floor; below this the stack scrolls
   final double bottomBarHeight;  // content height of the steel bottom bar
   final double bottomBarPad;     // extra padding under the bar content, above the home indicator
 
   const LayoutTuning({
-    this.appBarTopGap = 3,
+    // Rickard's device-verified final values (iPhone 12), codified task 18 A.
+    this.appBarTopGap = 0,
     this.seamAdvisorFloor = 5,
     this.seamFloorArchive = 5,
     // All rooms default to cover (task 17f): the advisor's plate was cropped from
@@ -44,12 +52,13 @@ class LayoutTuning {
     this.advisorFit = RoomFit.cover,
     this.workshopFit = RoomFit.cover,
     this.archiveFit = RoomFit.cover,
-    this.alignAdvisorY = 0.15,
-    this.alignWorkshopY = 0.0,
+    this.alignAdvisorY = -1.0, // cover Y-band: top of the advisor art
+    this.alignWorkshopY = 0.06,
     this.alignArchiveY = -0.2,
-    this.advisorHeight = 288, // taller penthouse
-    this.workshopHeight = 224,
-    this.archiveHeight = 224,
+    this.advisorHeight = 241, // ratio weights (advisor 241 : workshop 220 : archive 204)
+    this.workshopHeight = 220,
+    this.archiveHeight = 204,
+    this.roomMinHeight = 160,
     this.bottomBarHeight = 42,
     this.bottomBarPad = 0,
   });
@@ -67,6 +76,7 @@ class LayoutTuning {
     double? advisorHeight,
     double? workshopHeight,
     double? archiveHeight,
+    double? roomMinHeight,
     double? bottomBarHeight,
     double? bottomBarPad,
   }) =>
@@ -83,6 +93,7 @@ class LayoutTuning {
         advisorHeight: advisorHeight ?? this.advisorHeight,
         workshopHeight: workshopHeight ?? this.workshopHeight,
         archiveHeight: archiveHeight ?? this.archiveHeight,
+        roomMinHeight: roomMinHeight ?? this.roomMinHeight,
         bottomBarHeight: bottomBarHeight ?? this.bottomBarHeight,
         bottomBarPad: bottomBarPad ?? this.bottomBarPad,
       );
@@ -100,6 +111,7 @@ class LayoutTuning {
         'advisorHeight': advisorHeight,
         'workshopHeight': workshopHeight,
         'archiveHeight': archiveHeight,
+        'roomMinHeight': roomMinHeight,
         'bottomBarHeight': bottomBarHeight,
         'bottomBarPad': bottomBarPad,
       };
@@ -122,6 +134,7 @@ class LayoutTuning {
       advisorHeight: d('advisorHeight', def.advisorHeight),
       workshopHeight: d('workshopHeight', def.workshopHeight),
       archiveHeight: d('archiveHeight', def.archiveHeight),
+      roomMinHeight: d('roomMinHeight', def.roomMinHeight),
       bottomBarHeight: d('bottomBarHeight', def.bottomBarHeight),
       bottomBarPad: d('bottomBarPad', def.bottomBarPad),
     );

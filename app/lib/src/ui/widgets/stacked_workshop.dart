@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
@@ -30,36 +31,50 @@ class StackedWorkshop extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(layoutTuningProvider);
-    final order = <(String room, String asset, String label, RoomFit fit, double align, double height, double seamAbove)>[
+    final order = <(String room, String asset, String label, RoomFit fit, double align, double weight, double seamAbove)>[
       ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.advisorFit, t.alignAdvisorY, t.advisorHeight, 0),
       ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.workshopFit, t.alignWorkshopY, t.workshopHeight, t.seamAdvisorFloor),
       ('archive', 'assets/art/archive.png', 'ARCHIVE', t.archiveFit, t.alignArchiveY, t.archiveHeight, t.seamFloorArchive),
     ];
+    final sumW = order.fold<double>(0, (s, r) => s + r.$6);
+    final sumSeams = order.fold<double>(0, (s, r) => s + r.$7);
 
     return Container(
       color: Werkz.gunmetal,
-      child: SingleChildScrollView(
-        padding: EdgeInsets.only(bottom: scrollPadding),
-        child: Column(
-          children: [
-            for (var i = 0; i < order.length; i++) ...[
-              // Explicit, IDENTICAL treatment at every seam (task 15 C3): a steel
-              // bar with a lit top edge. Height is per-seam tunable.
-              if (i > 0) _FloorSlab(height: order[i].$7),
-              SizedBox(
-                height: order[i].$6,
-                child: _RoomPanel(
-                  asset: order[i].$2,
-                  label: order[i].$3,
-                  active: order[i].$1 == activeRoom,
-                  fit: order[i].$4,
-                  align: order[i].$5,
-                  chipTopInset: 4,
-                ),
-              ),
-            ],
-          ],
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Distribute the available content height by the room RATIOS (task 18 A);
+          // each storey is floored at roomMinHeight so a small screen scrolls
+          // instead of squishing. When nothing is floored the storeys fill exactly
+          // (no scroll, no gap) at whatever proportions Rickard tuned.
+          final forRooms = math.max(0.0, constraints.maxHeight - sumSeams);
+          double heightFor(double weight) =>
+              math.max(t.roomMinHeight, sumW == 0 ? 0 : forRooms * weight / sumW);
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: scrollPadding),
+            child: Column(
+              children: [
+                for (var i = 0; i < order.length; i++) ...[
+                  // Explicit, IDENTICAL treatment at every seam (task 15 C3): a
+                  // steel bar with a lit top edge. Height is per-seam tunable.
+                  if (i > 0) _FloorSlab(height: order[i].$7),
+                  SizedBox(
+                    height: heightFor(order[i].$6),
+                    child: _RoomPanel(
+                      asset: order[i].$2,
+                      label: order[i].$3,
+                      active: order[i].$1 == activeRoom,
+                      fit: order[i].$4,
+                      align: order[i].$5,
+                      chipTopInset: 4,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }

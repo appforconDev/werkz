@@ -99,6 +99,15 @@ void main() {
     await pumpGolden(t, name: 'home_ambient', app: _screen(const HomeScreen()));
   });
 
+  // Multi-device: the ratio layout (task 18 A) must fill each screen in the same
+  // proportions (small screens degrade to scroll, not squish).
+  testWidgets('home_ambient_se', (t) async {
+    await pumpGolden(t, name: 'home_ambient_se', device: deviceSE, app: _screen(const HomeScreen()));
+  });
+  testWidgets('home_ambient_promax', (t) async {
+    await pumpGolden(t, name: 'home_ambient_promax', device: deviceProMax, app: _screen(const HomeScreen()));
+  });
+
   testWidgets('home_decision', (t) async {
     await pumpGolden(t, name: 'home_decision',
         app: _screen(const HomeScreen(), pending: [_bashDecision]),

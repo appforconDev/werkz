@@ -55,10 +55,10 @@ void main() {
     expect(container.read(layoutTuningProvider).advisorHeight, 480); // slider max
     expect(find.text('480'), findsOneWidget);
 
-    // RESET restores the shipped defaults (advisor taller than the others).
+    // RESET restores the shipped defaults (advisor ratio = 241).
     await t.tap(find.text('RESET'));
     await t.pumpAndSettle();
-    expect(container.read(layoutTuningProvider).advisorHeight, 288);
+    expect(container.read(layoutTuningProvider).advisorHeight, 241);
   });
 
   // All three rooms default to cover (the fitHeight excursion stays gone; the
