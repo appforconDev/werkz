@@ -54,8 +54,8 @@ class SkelParams {
   final double walkSpeedPx;
 
   const SkelParams({
-    // Rickard's tuned values from the on-device slider pass (task 19k). Sliders
-    // still move on top of these.
+    // Rickard's final tuned values from the on-device slider pass (task 19k/19l).
+    // Sliders still move on top of these.
     this.walkHz = 0.8,
     this.legSwing = 0.36,
     this.armSwing = 0.41,
@@ -63,9 +63,9 @@ class SkelParams {
     this.headBob = 0.06,
     this.typeHz = 1.7,
     this.typeSwing = 0.42,
-    this.workerHeightPx = 99,
+    this.workerHeightPx = 80,
     this.workerX = 0.5,
-    this.walkSpeedPx = 22,
+    this.walkSpeedPx = 16,
   });
 
   SkelParams copyWith({double? walkHz, double? legSwing, double? armSwing, double? bob, double? headBob, double? typeHz, double? typeSwing, double? workerHeightPx, double? workerX, double? walkSpeedPx}) =>

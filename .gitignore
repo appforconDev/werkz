@@ -16,3 +16,7 @@ app/**/Pods/
 
 # Bind-pose render is a test artifact (regenerated each run); keep only the diff.
 assets-pipeline/sprites/parts-hires/*/_bindpose-render.png
+
+# Clipboard generation attempts are bulky (task 19l); ref.png + chosen.png are the
+# reproducible inputs the cut pipeline uses — keep those, drop the raw candidates.
+assets-pipeline/sprites/clipboard-candidates/*/attempt*.png

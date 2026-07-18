@@ -84,6 +84,47 @@ def strip_prop(crop):
                     px[x, y] = (0, 0, 0, 0)
     return im
 
+def isolate_clipboard(src, region, masterW, masterH):
+    # Isolate the GENERATED clipboard prop (task 19l): flood the LIGHT manila
+    # background inward from the edges — the dark clipboard frame blocks the flood,
+    # so the enclosed pale inspection sheet stays foreground (a plain dark-CC cut
+    # would punch out the paper). Then fit to the manifest region aspect so the
+    # sprite isn't stretched when placed.
+    im = Image.open(src).convert("RGB"); W, H = im.size; px = im.load()
+    lum = lambda p: 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2]
+    THR = 165
+    bg = [[False] * W for _ in range(H)]; q = deque()
+    for x in range(W):
+        for y in (0, H - 1):
+            if lum(px[x, y]) > THR and not bg[y][x]: bg[y][x] = True; q.append((x, y))
+    for y in range(H):
+        for x in (0, W - 1):
+            if lum(px[x, y]) > THR and not bg[y][x]: bg[y][x] = True; q.append((x, y))
+    while q:
+        cx, cy = q.popleft()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cx + dx, cy + dy
+            if 0 <= nx < W and 0 <= ny < H and not bg[ny][nx] and lum(px[nx, ny]) > THR:
+                bg[ny][nx] = True; q.append((nx, ny))
+    a = Image.new("L", (W, H), 0); ap = a.load()
+    for y in range(H):
+        for x in range(W):
+            if not bg[y][x]: ap[x, y] = 255
+    a = a.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))  # close pinholes
+    a = a.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(0.6))  # defringe
+    res = Image.open(src).convert("RGBA"); res.putalpha(a); bb = a.getbbox()
+    clip = res.crop(bb) if bb else res
+    # Region aspect in PIXELS = the component bbox aspect Flame builds (region
+    # fractions × master pixel dims), so the sprite fills without stretching.
+    r = region
+    target = ((r["x1"] - r["x0"]) * masterW) / ((r["y1"] - r["y0"]) * masterH)
+    cw, ch = clip.size
+    if cw / ch < target:
+        nw = int(ch * target); canvas = Image.new("RGBA", (nw, ch), (0, 0, 0, 0)); canvas.paste(clip, ((nw - cw) // 2, 0))
+    else:
+        nh = int(cw / target); canvas = Image.new("RGBA", (cw, nh), (0, 0, 0, 0)); canvas.paste(clip, (0, (nh - ch) // 2))
+    return canvas
+
 def load_master(persona):
     # Prefer Rickard's hand-cleaned transparent cutout when it exists (task 19i);
     # only decontaminate its edge. Otherwise threshold-isolate attempt1-1.
@@ -116,6 +157,15 @@ for p in ["7a19","3c57","9b72"]:
             if part["name"] in ARM_FAR:
                 far = strip_prop(far)
             far.save(f"{outdir}/{part['name']}-far.png")
+    # 3C57's inspector clipboard is a GENERATED prop (task 19l): the idle master
+    # lacks it, so its region-cut is empty. If a chosen candidate exists, isolate
+    # it and overwrite clipboard.png. Reproducible; regenerate the candidate with
+    # clipboard.mjs. It's a distinct near-arm part → never duplicated to the far arm.
+    chosen = f"{ROOT}/sprites/clipboard-candidates/{p}/chosen.png"
+    clip_part = next((x for x in m["parts"] if x["name"] == "clipboard"), None)
+    if clip_part and os.path.exists(chosen):
+        isolate_clipboard(chosen, clip_part["masterRegion"], W, H).save(f"{outdir}/clipboard.png")
+        print(p, "clipboard from generated prop")
     # debug overlay (manifest regions + pivots on the isolated hi-res master)
     ov = master.copy(); d = ImageDraw.Draw(ov)
     for part in m["parts"]:

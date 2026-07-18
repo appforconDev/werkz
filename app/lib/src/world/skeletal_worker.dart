@@ -112,12 +112,22 @@ class SkeletalWorker extends PositionComponent {
   bool _facingRight = false; // authored facing is LEFT
   bool _patrolRight = true; // walk-loop direction (task 19j): true = toward coffee
 
+  /// Per-persona reading offsets (task 19l), EXPOSED not silent: [heightScale]
+  /// multiplies the shared workerHeightPx so a tall-thin persona reads taller and
+  /// a squat one shorter at the same base height; [homeXFrac] (0..1) is this
+  /// worker's post on the floor band — null means "use the live workerX slider"
+  /// (the primary, event-driven worker).
+  final double heightScale;
+  final double? homeXFrac;
+
   SkeletalWorker({
     required this.manifest,
     required this.imageFolder,
     this.renderHeight = 140,
     this.state = WorkerState.maintenance,
     this.params = const SkelParams(),
+    this.heightScale = 1.0,
+    this.homeXFrac,
     SpriteLoader? loadSprite,
   }) : _load = loadSprite ?? _flameLoader;
 
@@ -144,7 +154,7 @@ class SkeletalWorker extends PositionComponent {
     _gameWidth = width;
     _floorY = floorY;
     if (!_placed && width > 0) {
-      _x = width * params.workerX;
+      _x = width * (homeXFrac ?? params.workerX);
       _placed = true;
       position = Vector2(_x, _floorY);
     }
@@ -260,9 +270,9 @@ class SkeletalWorker extends PositionComponent {
     // Locomotion (task 19i) + debug state forcer (task 19j). AUTO walks toward the
     // event-driven state's target x; a forced state overrides it: walk-loop
     // patrols desk↔coffee forever (turning at each end), the rest loop in place.
-    final s = _buildHeight > 0 ? params.workerHeightPx / _buildHeight : 1.0;
+    final s = _buildHeight > 0 ? params.workerHeightPx * heightScale / _buildHeight : 1.0;
     if (_placed) {
-      final home = _gameWidth * params.workerX;
+      final home = _gameWidth * (homeXFrac ?? params.workerX);
       final deskX = targetXFor(WorkerState.working, _gameWidth, home);
       final coffeeX = targetXFor(WorkerState.maintenance, _gameWidth, home);
 

@@ -76,9 +76,15 @@ void main() {
       expect(typing.angles['arm-upper']!.abs(), greaterThan(0.01));
     });
 
-    test('tuned default frequencies (task 19k device pass)', () {
+    test('tuned defaults (task 19k/19l device pass)', () {
       expect(p.walkHz, 0.8);
       expect(p.typeHz, 1.7);
+      expect(p.workerHeightPx, 80); // 19l correction (was 99)
+      expect(p.walkSpeedPx, 16); // 19l correction (was 22)
+      expect(p.legSwing, 0.36);
+      expect(p.armSwing, 0.41);
+      expect(p.bob, 3);
+      expect(p.typeSwing, 0.42);
       // sanity: a full walk cycle is ~1.25s
       expect(1 / p.walkHz, closeTo(1.25, 1e-9));
     });

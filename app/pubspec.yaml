@@ -84,10 +84,14 @@ flutter:
     - assets/art/workshop-floor.png
     - assets/art/advisors-office.png
     - assets/art/archive.png
-    # Worker skeletal-sprite parts + rig manifest (task 19e, debug-gated). Bolt
-    # first — the other two personas' parts land when they're bundled.
+    # Worker skeletal-sprite parts + rig manifests (task 19e/19l, debug-gated).
+    # All three personas: Bolt (7a19), Checkwell (3c57), Sparkhand (9b72).
     - assets/images/workers/7a19/
     - assets/workers/7a19/rig-manifest.json
+    - assets/images/workers/3c57/
+    - assets/workers/3c57/rig-manifest.json
+    - assets/images/workers/9b72/
+    - assets/workers/9b72/rig-manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

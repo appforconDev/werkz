@@ -9,13 +9,32 @@ import 'rig_manifest.dart';
 import 'worker_animations.dart';
 import 'worker_sprite.dart';
 
-// Mount layer for the debug worker (task 19f). Hosts one SkeletalWorker (Bolt) in
-// a transparent Flame game over a room's floor band, fed by the live WerkzEvent
-// stream (state) and the skeletal tuning sliders (params). Built ONLY where the
-// caller gates on debugWorkerSpritesProvider — zero footprint when off.
+// Mount layer for the debug workers (task 19f → 19l). Hosts the THREE personas in
+// a transparent Flame game over a room's floor band: Bolt (7a19) driven by the
+// live WerkzEvent stream, Checkwell (3c57) and Sparkhand (9b72) ambient-idle at
+// their own posts. All three take the tuning sliders + STATE forcer. Built ONLY
+// where the caller gates on debugWorkerSpritesProvider — zero footprint when off.
 //
-// Loud failure: if the manifest/parts fail to load, the game's onLoad throws and
+// Loud failure: if a manifest/part fails to load, the game's onLoad throws and
 // GameWidget.errorBuilder paints a visible error — never a silently empty room.
+
+/// Per-persona mount config (task 19l). Height offsets are EXPOSED, not silent:
+/// Checkwell is tall-thin so reads taller, Sparkhand squat so reads shorter, at
+/// the same base workerHeightPx. `homeXFrac` spreads them across the band; the
+/// primary (Bolt) uses the live workerX slider instead (homeXFrac null).
+class _PersonaMount {
+  final String folder;
+  final double? homeXFrac;
+  final double heightScale;
+  final bool primary; // receives the event feed
+  const _PersonaMount(this.folder, {this.homeXFrac, this.heightScale = 1.0, this.primary = false});
+}
+
+const _mounts = <_PersonaMount>[
+  _PersonaMount('3c57', homeXFrac: 0.20, heightScale: 1.18), // Checkwell — tall-thin
+  _PersonaMount('7a19', primary: true), // Bolt — event-driven, uses workerX
+  _PersonaMount('9b72', homeXFrac: 0.82, heightScale: 0.90), // Sparkhand — squat
+];
 
 class WorkerLayer extends ConsumerStatefulWidget {
   final double renderHeight; // worker height target (~100–140 logical px)
@@ -29,7 +48,8 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
 
   @override
   Widget build(BuildContext context) {
-    // Live wiring: new feed events → worker state; tuning sliders → params.
+    // Live wiring: new feed events → the primary worker's state; tuning sliders +
+    // STATE forcer → all workers.
     ref.listen<WorkshopState>(workshopProvider, (_, next) => _game.pushFeed(next.feed));
     _game.applyParams(ref.watch(skelParamsProvider));
     _game.applyForced(ref.watch(forcedSkelStateProvider));
@@ -50,7 +70,8 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
 
 class _WorkerGame extends FlameGame {
   final double renderHeight;
-  SkeletalWorker? _worker;
+  final List<SkeletalWorker> _workers = [];
+  SkeletalWorker? _primary;
   String? _lastEventId;
   Vector2 _gameSize = Vector2.zero();
 
@@ -61,16 +82,21 @@ class _WorkerGame extends FlameGame {
 
   @override
   Future<void> onLoad() async {
-    final manifest = await RigManifest.load('assets/workers/7a19/rig-manifest.json');
-    final worker = SkeletalWorker(
-      manifest: manifest,
-      imageFolder: 'workers/7a19',
-      renderHeight: renderHeight,
-      state: WorkerState.maintenance,
-    );
-    _worker = worker;
-    await add(worker); // triggers worker.onLoad — throws loudly on a missing part
-    _pushViewport(); // onGameResize fires BEFORE onLoad (worker null then) — do it now
+    for (final mount in _mounts) {
+      final manifest = await RigManifest.load('assets/workers/${mount.folder}/rig-manifest.json');
+      final worker = SkeletalWorker(
+        manifest: manifest,
+        imageFolder: 'workers/${mount.folder}',
+        renderHeight: renderHeight,
+        state: mount.primary ? WorkerState.maintenance : WorkerState.idle,
+        heightScale: mount.heightScale,
+        homeXFrac: mount.homeXFrac,
+      );
+      _workers.add(worker);
+      if (mount.primary) _primary = worker;
+      await add(worker); // triggers worker.onLoad — throws loudly on a missing part
+    }
+    _pushViewport(); // onGameResize fires BEFORE onLoad (workers empty then) — do it now
   }
 
   @override
@@ -80,25 +106,36 @@ class _WorkerGame extends FlameGame {
     _pushViewport();
   }
 
-  // Hand the worker its floor band (width for the walk target, bottom = floor
-  // line). The worker owns its own x now (locomotion, task 19i) — the mount only
-  // supplies the viewport; it no longer pins the position every frame.
+  // Hand every worker its floor band (width for the walk target, bottom = floor
+  // line). Each worker owns its own x (locomotion, task 19i) — the mount only
+  // supplies the viewport.
   void _pushViewport() {
-    final w = _worker;
-    if (w == null || _gameSize.x == 0 || _gameSize.y == 0) return;
-    w.setViewport(_gameSize.x, _gameSize.y);
+    if (_gameSize.x == 0 || _gameSize.y == 0) return;
+    for (final w in _workers) {
+      w.setViewport(_gameSize.x, _gameSize.y);
+    }
   }
 
-  /// Feed the newest daemon event to the worker (the pure mapping decides state).
+  /// Feed the newest daemon event to the PRIMARY worker only (task 19l — dispatch
+  /// routing to a specific worker is a later task; the other two stay ambient).
   void pushFeed(List<WerkzEvent> feed) {
     if (feed.isEmpty) return;
     final last = feed.last;
     if (last.eventId != _lastEventId) {
       _lastEventId = last.eventId;
-      _worker?.onEvent(last);
+      _primary?.onEvent(last);
     }
   }
 
-  void applyParams(SkelParams params) => _worker?.params = params;
-  void applyForced(ForcedSkelState forced) => _worker?.forced = forced;
+  void applyParams(SkelParams params) {
+    for (final w in _workers) {
+      w.params = params;
+    }
+  }
+
+  void applyForced(ForcedSkelState forced) {
+    for (final w in _workers) {
+      w.forced = forced;
+    }
+  }
 }
