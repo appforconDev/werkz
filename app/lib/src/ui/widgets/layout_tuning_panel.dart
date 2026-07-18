@@ -5,6 +5,8 @@ import '../../state/layout_tuning.dart';
 import '../../state/skel_tuning.dart';
 import '../../state/transit_provider.dart';
 import '../../state/worker_model_provider.dart';
+import '../../world/room_registry.dart';
+import '../../world/transit.dart';
 import '../theme.dart';
 
 // LAYOUT TUNING (task 17 / 17b) — debug builds only. A COMPACT, DRAGGABLE overlay
@@ -269,17 +271,29 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
   // before any transit visuals exist: name · room · status · job.
   Widget _workerReadout() {
     final model = ref.watch(workerModelProvider);
+    final transit = ref.watch(transitProvider);
+    final tp = ref.watch(transitParamsProvider);
+    String renderState(String persona, String room) {
+      final wt = transit[persona];
+      if (wt?.active != null) return transitPhaseLabel(wt!.active!, tp);
+      final vr = wt?.visualRoom ?? room;
+      return isRenderableRoom(vr) ? '@$vr' : 'NOWHERE:$vr'; // NOWHERE ⇒ the vanish bug, must never show
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('MODEL', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
-          for (final w in model.workers)
+          const Text('MODEL · render', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
+          for (final w in model.workers) ...[
             Text(
               '${w.personaId}  ${w.currentRoom}  ${w.status.name}${w.jobId != null ? '  job:${w.jobId}' : ''}',
               style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontSize: 8),
             ),
+            Text('   ↳ ${renderState(w.personaId, w.currentRoom)}',
+                style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 8)),
+          ],
           if (model.queue.isNotEmpty)
             Text('queued: ${model.queue.join(", ")}',
                 style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.stampRed, fontSize: 8)),

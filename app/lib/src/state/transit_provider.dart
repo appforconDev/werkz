@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../world/room_registry.dart';
 import '../world/transit.dart';
 import '../world/worker_model.dart';
 import 'skel_tuning.dart';
@@ -44,6 +46,8 @@ final transitProvider =
     NotifierProvider<TransitController, Map<String, WorkerTransit>>(TransitController.new);
 
 class TransitController extends Notifier<Map<String, WorkerTransit>> {
+  final Map<String, double> _offView = {}; // seconds a worker has rendered nowhere (watchdog)
+
   @override
   Map<String, WorkerTransit> build() {
     ref.listen(workerModelProvider, (_, m) => _sync(m));
@@ -85,10 +89,11 @@ class TransitController extends Notifier<Map<String, WorkerTransit>> {
   /// Advance every in-flight transit by [dt]. On arrival, chain to the model's
   /// latest room (never skip) — or, while patrolling, bounce to the other end.
   void advance(double dt) {
-    final patrol = _patrolling;
-    if (!patrol && !state.values.any((w) => w.active != null)) return; // nothing moving → idle frame
     final params = ref.read(transitParamsProvider);
     final model = ref.read(workerModelProvider);
+    _watchdog(dt, params, model); // ALWAYS — a stall must never survive silently
+    final patrol = _patrolling;
+    if (!patrol && !state.values.any((w) => w.active != null)) return; // nothing moving → idle frame
     final next = <String, WorkerTransit>{...state};
     var changed = false;
 
@@ -133,5 +138,39 @@ class TransitController extends Notifier<Map<String, WorkerTransit>> {
       changed = true;
     }
     if (changed) state = next;
+  }
+
+  // Watchdog invariant (task 20b-fix): a worker is ALWAYS either drawn in exactly
+  // one room, or in a bounded off-view beat. If one renders nowhere (an unmounted
+  // room, or a beat that outstays its deadline — clock stall / orphaned chain) for
+  // longer than the longest legit beat + margin, log LOUDLY and snap it to the
+  // model's (renderable) room. With the room clamp this path should never run.
+  void _watchdog(double dt, TransitParams params, WorkerModelState model) {
+    final threshold = math.max(2.0, transitBeat(params, roomDistance('advisors-office', 'archive')) + 0.5);
+    List<String>? recover;
+    for (final e in state.entries) {
+      final wt = e.value;
+      final fRoom = wt.active != null ? transitFrame(wt.active!, params).room : null;
+      final offView = wt.active != null
+          ? (fRoom == null || !isRenderableRoom(fRoom)) // beat, or crossing to an unmounted room
+          : !isRenderableRoom(wt.visualRoom); // resting in a storey nothing draws
+      if (offView) {
+        final t = (_offView[e.key] ?? 0) + dt;
+        _offView[e.key] = t;
+        if (t > threshold) (recover ??= []).add(e.key);
+      } else {
+        _offView[e.key] = 0;
+      }
+    }
+    if (recover == null) return;
+    final next = {...state};
+    for (final persona in recover) {
+      final logical = model.forPersona(persona)?.currentRoom;
+      final snap = (logical != null && isRenderableRoom(logical)) ? logical : 'workshop-floor';
+      debugPrint('[transit] WATCHDOG: $persona rendered nowhere >${threshold.toStringAsFixed(1)}s — snapping to $snap');
+      next[persona] = WorkerTransit(visualRoom: snap);
+      _offView[persona] = 0;
+    }
+    state = next;
   }
 }

@@ -1,4 +1,5 @@
 import '../models/werkz_event.dart';
+import 'room_registry.dart';
 import 'worker_sprite.dart';
 
 // Worker job-assignment + room-membership model (task 20a — foundation for
@@ -205,7 +206,7 @@ WorkerModelState _assign(WorkerModelState st, String jobId, String? room) {
     final idx = (st.rrCursor + i) % n;
     if (st.workers[idx].available) {
       final workers = [...st.workers];
-      workers[idx] = workers[idx]._to(room: room, status: WorkerStatus.working, jobId: jobId);
+      workers[idx] = workers[idx]._to(room: renderableRoom(room), status: WorkerStatus.working, jobId: jobId);
       return st._with(workers: workers, rrCursor: (idx + 1) % n);
     }
   }
@@ -230,7 +231,7 @@ WorkerModelState _routeToJob(WorkerModelState st, String jobId, String? room, Wo
   final idx = st.workers.indexWhere((w) => w.jobId == jobId);
   if (idx < 0) return st;
   final workers = [...st.workers];
-  workers[idx] = workers[idx]._to(room: room, status: status);
+  workers[idx] = workers[idx]._to(room: renderableRoom(room), status: status);
   return st._with(workers: workers);
 }
 
@@ -238,6 +239,6 @@ WorkerModelState _routeToPersona(WorkerModelState st, String personaId, String? 
   final idx = st.workers.indexWhere((w) => w.personaId == personaId);
   if (idx < 0) return st;
   final workers = [...st.workers];
-  workers[idx] = workers[idx]._to(room: room, status: status);
+  workers[idx] = workers[idx]._to(room: renderableRoom(room), status: status);
   return st._with(workers: workers);
 }

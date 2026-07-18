@@ -26,9 +26,11 @@ class TransitParams {
   final double enterSec; // enter-and-walk-in
   final double edgeMargin; // how far PAST the edge (frac of width) the worker steps, clipped by bounds
   const TransitParams({
-    this.beatSec = 0.6,
-    this.exitSec = 0.5,
-    this.enterSec = 0.5,
+    // Scaled up with the slower walk (task 20b-fix) so the edge-walk doesn't
+    // outrun the in-room feet, and the beat reads at the new pace.
+    this.beatSec = 1.0,
+    this.exitSec = 1.4,
+    this.enterSec = 1.4,
     this.edgeMargin = 0.16,
   });
 
@@ -69,6 +71,18 @@ class TransitFrame {
   final bool facingRight;
   final bool done;
   const TransitFrame({this.room, required this.xFrac, required this.facingRight, this.done = false});
+}
+
+/// A short render-state label for the debug worker table (task 20b-fix): which
+/// transit phase the worker is in + seconds left, so an off-view stall is visible.
+String transitPhaseLabel(Transit t, TransitParams p) {
+  final beat = transitBeat(p, t.distance);
+  final e = t.elapsed;
+  if (e < p.exitSec) return 'exit→${t.toRoom} ${(p.exitSec - e).toStringAsFixed(1)}s';
+  if (e < p.exitSec + beat) return 'OFF-VIEW beat ${(p.exitSec + beat - e).toStringAsFixed(1)}s';
+  final total = p.exitSec + beat + p.enterSec;
+  if (e < total) return 'enter→${t.toRoom} ${(total - e).toStringAsFixed(1)}s';
+  return 'arrived ${t.toRoom}';
 }
 
 double _lerp(double a, double b, double t) => a + (b - a) * t;

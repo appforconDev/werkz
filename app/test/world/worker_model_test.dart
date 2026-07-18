@@ -3,6 +3,7 @@
 // without a renderer.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:werkz_app/src/models/werkz_event.dart';
+import 'package:werkz_app/src/world/room_registry.dart';
 import 'package:werkz_app/src/world/worker_model.dart';
 
 int _n = 0;
@@ -126,6 +127,36 @@ void main() {
       final warns = <String>[];
       feed(WorkerModelState.initial(), [ev('session.started')], warnings: warns);
       expect(warns, isEmpty);
+    });
+  });
+
+  group('no vanish — unrendered rooms fold to the floor (20b-fix)', () {
+    test('a job routed to test-workshop (no layer) lands its worker on the floor', () {
+      var st = WorkerModelState.initial();
+      st = feed(st, [ev('job.assigned', jobId: 'j1', room: 'workshop-floor')]);
+      st = feed(st, [ev('task.started', jobId: 'j1', room: 'test-workshop')]); // real event-model room, unrendered
+      expect(st.forJob('j1')!.currentRoom, 'workshop-floor', reason: 'never a storey nothing draws');
+    });
+
+    test('primary activity in an unrendered room also folds to the floor', () {
+      var st = WorkerModelState.initial();
+      st = feed(st, [ev('task.started', room: 'octagon')]); // no jobId → primary; octagon not built
+      expect(st.forPersona(kPrimaryPersona)!.currentRoom, 'workshop-floor');
+    });
+
+    test('every worker always sits in a rendered room', () {
+      var st = WorkerModelState.initial();
+      for (final e in [
+        ev('job.assigned', jobId: 'a', room: 'test-workshop'),
+        ev('task.started', jobId: 'a', room: 'octagon'),
+        ev('records.pulled', room: 'archive'),
+        ev('job.completed', jobId: 'a'),
+      ]) {
+        st = feed(st, [e]);
+        for (final w in st.workers) {
+          expect(isRenderableRoom(w.currentRoom), isTrue, reason: '${w.personaId} in ${w.currentRoom}');
+        }
+      }
     });
   });
 

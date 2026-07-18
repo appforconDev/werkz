@@ -2,12 +2,26 @@
 // worker, advances it, applies a queued room-change on ARRIVAL (never skips), runs
 // concurrent per-worker transits, and patrols on demand. Driven by a fake model so
 // it's deterministic without the daemon.
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:werkz_app/src/state/skel_tuning.dart';
 import 'package:werkz_app/src/state/transit_provider.dart';
 import 'package:werkz_app/src/state/worker_model_provider.dart';
+import 'package:werkz_app/src/world/room_registry.dart';
+import 'package:werkz_app/src/world/transit.dart';
 import 'package:werkz_app/src/world/worker_model.dart';
+
+// Mirror of WorkerLayer's render decision: the set of MOUNTED rooms that draw a
+// worker right now. Must always be 0 (only during a beat) or 1 — never 2, never a
+// resting worker in an unrendered room.
+Set<String> roomsRendering(WorkerTransit wt, TransitParams p) {
+  if (wt.active != null) {
+    final f = transitFrame(wt.active!, p);
+    return f.room == null ? <String>{} : {f.room!};
+  }
+  return {wt.visualRoom};
+}
 
 class _FakeModel extends WorkerModelController {
   @override
@@ -59,7 +73,7 @@ void main() {
   test('advancing to completion lands the worker and clears the transit', () {
     final c = make();
     model(c).set(_model({'WX-7A19': 'archive'}));
-    c.read(transitProvider.notifier).advance(2.0); // past total
+    c.read(transitProvider.notifier).advance(6.0); // past total
     final wt = c.read(transitProvider)['WX-7A19']!;
     expect(wt.active, isNull);
     expect(wt.visualRoom, 'archive');
@@ -73,7 +87,7 @@ void main() {
     // still walking to the FIRST target — not redirected mid-flight
     expect(c.read(transitProvider)['WX-7A19']!.active!.toRoom, 'archive');
 
-    c.read(transitProvider.notifier).advance(2.0); // arrive archive → chain to advisors
+    c.read(transitProvider.notifier).advance(6.0); // arrive archive → chain to advisors
     final t = c.read(transitProvider)['WX-7A19']!.active;
     expect(t, isNotNull);
     expect(t!.fromRoom, 'archive');
@@ -85,7 +99,7 @@ void main() {
     model(c).set(_model({'WX-7A19': 'archive', 'WX-9B72': 'advisors-office'}));
     expect(c.read(transitProvider)['WX-7A19']!.active, isNotNull);
     expect(c.read(transitProvider)['WX-9B72']!.active, isNotNull);
-    c.read(transitProvider.notifier).advance(2.0);
+    c.read(transitProvider.notifier).advance(6.0);
     expect(c.read(transitProvider)['WX-7A19']!.visualRoom, 'archive');
     expect(c.read(transitProvider)['WX-9B72']!.visualRoom, 'advisors-office');
   });
@@ -100,5 +114,52 @@ void main() {
     // and it keeps going: on arrival it bounces to the other end
     c.read(transitProvider.notifier).advance(5.0);
     expect(c.read(transitProvider)['WX-7A19']!.active, isNotNull);
+  });
+
+  test('watchdog recovers a worker stuck in an unrendered room', () {
+    final c = make();
+    // Inject an unmounted room directly (bypasses the ingest clamp) to force a stall.
+    model(c).set(_model({'WX-7A19': 'test-workshop'}));
+    for (var i = 0; i < 6; i++) {
+      c.read(transitProvider.notifier).advance(2.0); // past the watchdog threshold
+    }
+    final wt = c.read(transitProvider)['WX-7A19']!;
+    expect(wt.active, isNull);
+    expect(wt.visualRoom, 'workshop-floor'); // snapped back into a drawn storey
+    expect(isRenderableRoom(wt.visualRoom), isTrue);
+  });
+
+  test('a worker sent to the advisor office renders there (band present)', () {
+    expect(roomDef('advisors-office')!.bandHeight, greaterThan(0)); // floor-band geometry exists
+    final c = make();
+    model(c).set(_model({'WX-7A19': 'advisors-office'}));
+    c.read(transitProvider.notifier).advance(30.0); // walk all the way in
+    expect(roomsRendering(c.read(transitProvider)['WX-7A19']!, const TransitParams()), {'advisors-office'});
+  });
+
+  test('random room-changes + advances never orphan a worker (property invariant)', () {
+    final c = make();
+    final rng = Random(7);
+    const rooms = ['advisors-office', 'workshop-floor', 'archive']; // real ingest clamps to these
+    const personas = ['WX-3C57', 'WX-7A19', 'WX-9B72'];
+    final current = {for (final p in personas) p: personaSpec(p).homeRoom};
+
+    for (var step = 0; step < 400; step++) {
+      if (rng.nextBool()) {
+        current[personas[rng.nextInt(3)]] = rooms[rng.nextInt(3)];
+        model(c).set(_model(current));
+      } else {
+        c.read(transitProvider.notifier).advance(rng.nextDouble() * 1.6);
+      }
+      final st = c.read(transitProvider);
+      for (final p in personas) {
+        final wt = st[p]!;
+        expect(roomsRendering(wt, const TransitParams()).length, lessThanOrEqualTo(1),
+            reason: '$p double-rendered at step $step');
+        if (wt.active == null) {
+          expect(isRenderableRoom(wt.visualRoom), isTrue, reason: '$p orphaned in ${wt.visualRoom} at step $step');
+        }
+      }
+    }
   });
 }

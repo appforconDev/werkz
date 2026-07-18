@@ -24,15 +24,29 @@ class RoomDef {
   });
 }
 
-/// The building today (Workshop / Advisor / Archive). Octagon + test-workshop
-/// slot in later as new entries; no other code changes.
+/// The building RENDERED today (Workshop / Advisor / Archive). Octagon +
+/// test-workshop slot in later as new entries; no other code changes. Band
+/// geometry is explicit per room (task 20b-fix — the advisor entry was relying on
+/// defaults, so verify it can host a worker): feet a touch above the seam, a band
+/// tall enough for the biggest persona at the tuned height.
 const kRooms = <String, RoomDef>{
-  'advisors-office': RoomDef(id: 'advisors-office', buildOrder: 0),
-  'workshop-floor': RoomDef(id: 'workshop-floor', buildOrder: 1),
-  'archive': RoomDef(id: 'archive', buildOrder: 2),
+  'advisors-office': RoomDef(id: 'advisors-office', buildOrder: 0, bandBottom: 4, bandHeight: 160),
+  'workshop-floor': RoomDef(id: 'workshop-floor', buildOrder: 1, bandBottom: 4, bandHeight: 160),
+  'archive': RoomDef(id: 'archive', buildOrder: 2, bandBottom: 4, bandHeight: 160),
 };
 
 RoomDef? roomDef(String id) => kRooms[id];
+
+/// The interim building draws only [kRooms]. A canonical room that isn't built yet
+/// (test-workshop, octagon, building) folds to the workshop floor so a worker is
+/// NEVER placed in a storey nothing renders — the root of the 20b vanish
+/// (task 20b-fix). null passes through (no room ⇒ no move). test-workshop is the
+/// workshop's own test bench (event-model §2.2), so the floor is the honest home.
+String? renderableRoom(String? room) =>
+    room == null ? null : (kRooms.containsKey(room) ? room : 'workshop-floor');
+
+/// True when a room is actually drawn (has a WorkerLayer). Used by the watchdog.
+bool isRenderableRoom(String room) => kRooms.containsKey(room);
 
 /// Vertical distance between two rooms in storeys (canon build order) — scales the
 /// transit beat so a longer trip (archive ↔ penthouse) reads as taking longer.

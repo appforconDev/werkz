@@ -36,7 +36,7 @@ void main() {
   });
 
   group('transit frame phasing', () {
-    const p = TransitParams(); // exit .5, beat .6, enter .5
+    const p = TransitParams(exitSec: 0.5, beatSec: 0.6, enterSec: 0.5); // explicit: phasing, not defaults
     // Sparkhand-ish start on the right → exits/enters the RIGHT edge.
     Transit t(double e) => Transit(fromRoom: 'workshop-floor', toRoom: 'archive', startXFrac: 0.82, elapsed: e);
 
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('the beat scales with room distance', () {
-      const p2 = TransitParams(beatSec: 0.6);
+      const p2 = TransitParams(beatSec: 0.6, exitSec: 0.5, enterSec: 0.5);
       expect(transitBeat(p2, 1), closeTo(0.6, 1e-9));
       expect(transitBeat(p2, 2), closeTo(1.2, 1e-9)); // penthouse↔basement takes longer
       expect(transitTotal(p2, 2), closeTo(0.5 + 1.2 + 0.5, 1e-9));

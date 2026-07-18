@@ -56,9 +56,9 @@ class SkelParams {
   final double walkSpeedPx;
 
   const SkelParams({
-    // Rickard's final tuned values from the on-device slider pass (task 19k/19l).
-    // Sliders still move on top of these.
-    this.walkHz = 0.8,
+    // Rickard's tuned values (task 19k/19l); walk speed slowed hard on the 20b
+    // device pass (task 20b-fix: everything read far too fast). Sliders ride on top.
+    this.walkHz = 0.5, // cadence sanity-passed down with the slower feet (no moonwalk)
     this.legSwing = 0.36,
     this.armSwing = 0.41,
     this.bob = 3,
@@ -67,7 +67,7 @@ class SkelParams {
     this.typeSwing = 0.42,
     this.workerHeightPx = 80,
     this.workerX = 0.5,
-    this.walkSpeedPx = 16,
+    this.walkSpeedPx = 5, // 16 → 5 (Rickard's ~⅓ call)
   });
 
   SkelParams copyWith({double? walkHz, double? legSwing, double? armSwing, double? bob, double? headBob, double? typeHz, double? typeSwing, double? workerHeightPx, double? workerX, double? walkSpeedPx}) =>
