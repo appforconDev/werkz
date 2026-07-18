@@ -97,6 +97,13 @@ class OnboardScreen extends StatelessWidget {
                       'Hosting it for you — Cloud Workshop — is a planned tier.',
                       style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, height: 1.5, color: Werkz.gunmetal),
                     ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Werkz runs in your existing project environment — if claude can '
+                      'push or deploy from your terminal, your workers can too. Werkz '
+                      'never stores your credentials.',
+                      style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, height: 1.5, color: Werkz.gunmetal),
+                    ),
                   ],
                 ),
               ),
