@@ -13,3 +13,6 @@ app/build/
 app/.flutter-plugins*
 app/ios/Flutter/ephemeral/
 app/**/Pods/
+
+# Bind-pose render is a test artifact (regenerated each run); keep only the diff.
+assets-pipeline/sprites/parts-hires/*/_bindpose-render.png

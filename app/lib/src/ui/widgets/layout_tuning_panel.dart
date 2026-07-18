@@ -172,6 +172,21 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
         child: Text('— SKELETAL (debug workers) —',
             style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
       ),
+      // WORKERS master toggle (task 19h) — enable/disable the worker layer in-app.
+      SizedBox(
+        height: 30,
+        child: Row(children: [
+          const SizedBox(
+            width: 118,
+            child: Text('WORKERS', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+          Switch(
+            value: ref.watch(debugWorkerSpritesProvider),
+            activeThumbColor: Werkz.approvalGreen,
+            onChanged: (v) => ref.read(debugWorkerSpritesProvider.notifier).set(v),
+          ),
+        ]),
+      ),
       _slider('worker height', sp.workerHeightPx, 50, 300, (v) => spc.update(sp.copyWith(workerHeightPx: v)), decimals: 0),
       _slider('worker x', sp.workerX, 0, 1, (v) => spc.update(sp.copyWith(workerX: v)), decimals: 2),
       _slider('walk hz', sp.walkHz, 0.5, 4, (v) => spc.update(sp.copyWith(walkHz: v))),

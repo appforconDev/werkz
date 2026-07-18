@@ -30,6 +30,21 @@ const _farLimbs = ['leg-upper', 'arm-upper', 'leg-lower', 'arm-lower'];
   return (w: masterPxW * scale, h: targetHeight);
 }
 
+/// The bind-pose transform of one part (task 19h). Flame positions a child from
+/// the PARENT'S TOP-LEFT, so a part's local position = its pivot-world minus the
+/// parent's world top-left. Returns the local position to set AND this part's own
+/// world top-left (to pass to its children). CORRECT assembly ⇒ `worldTopLeft`
+/// equals `region.topLeft × renderSize` for every part — that is the regression
+/// lock. Coordinates in render px; renderSize = (renderW, renderH).
+({ui.Offset localPos, ui.Offset worldTopLeft}) bindPoseXform(
+    RigPart part, ui.Offset parentTopLeft, double renderW, double renderH) {
+  final pw = ui.Offset(part.pivotInMaster.dx * renderW, part.pivotInMaster.dy * renderH);
+  final bboxW = part.masterRegion.width * renderW;
+  final bboxH = part.masterRegion.height * renderH;
+  final worldTopLeft = pw - ui.Offset(part.pivot.dx * bboxW, part.pivot.dy * bboxH);
+  return (localPos: pw - parentTopLeft, worldTopLeft: worldTopLeft);
+}
+
 class SkeletalWorker extends PositionComponent {
   final RigManifest manifest;
   final String imageFolder; // Flame images prefix, e.g. 'workers/7a19'
@@ -98,47 +113,54 @@ class SkeletalWorker extends PositionComponent {
     size = Vector2(renderW, rs.h);
     anchor = Anchor.bottomCenter; // scale + place from the feet, not the top-left
 
-    Vector2 pivotWorld(RigPart p) =>
-        Vector2(p.pivotInMaster.dx * renderW, p.pivotInMaster.dy * renderHeight);
+    Vector2 bboxOf(RigPart p) =>
+        Vector2(p.masterRegion.width * renderW, p.masterRegion.height * renderHeight);
+    Vector2 v(ui.Offset o) => Vector2(o.dx, o.dy);
 
-    void build(RigPart part, PositionComponent parent, Vector2 parentPivot) {
-      final bbox = Vector2(part.masterRegion.width * renderW, part.masterRegion.height * renderHeight);
-      final pw = pivotWorld(part);
+    // Each part's WORLD top-left threaded down the hierarchy (the 19h fix — see
+    // bindPoseXform: Flame child origin is the parent's top-left, not its pivot).
+    final topLeft = <String, ui.Offset>{};
+
+    void build(RigPart part, PositionComponent parent, ui.Offset parentTopLeft) {
+      final x = bindPoseXform(part, parentTopLeft, renderW, renderHeight);
       final comp = SpriteComponent(
         sprite: sprites[part.name],
-        size: bbox,
+        size: bboxOf(part),
         anchor: Anchor(part.pivot.dx, part.pivot.dy),
         priority: part.z,
-      )..position = pw - parentPivot;
+      )..position = v(x.localPos);
       parent.add(comp);
       _joints[part.name] = comp;
+      topLeft[part.name] = x.worldTopLeft;
       for (final child in manifest.parts.where((c) => c.attachParent == part.name)) {
-        build(child, comp, pw);
+        build(child, comp, x.worldTopLeft);
       }
     }
 
-    build(root, this, Vector2.zero());
+    build(root, this, ui.Offset.zero);
     _rootBaseY = _joints[root.name]!.position.y;
 
     // Far-side chain: each far limb parents to its parent's far variant if there
-    // is one, else the near parent — mirrored geometry, painted behind.
+    // is one, else the near parent — mirrored geometry, nudged + painted behind.
+    // Same top-left rule; _farLimbs is ordered uppers-before-lowers.
+    final nudge = ui.Offset(renderW * 0.05, 0);
     for (final base in _farLimbs) {
       final far = sprites['$base-far'];
       final part = manifest.part(base);
       if (far == null || part == null) continue;
       final parentName = part.attachParent;
       final parentComp = _joints['$parentName-far'] ?? _joints[parentName] ?? this;
-      final parentPivot = parentName == null ? Vector2.zero() : pivotWorld(manifest.require(parentName));
-      final bbox = Vector2(part.masterRegion.width * renderW, part.masterRegion.height * renderHeight);
-      final pw = pivotWorld(part) + Vector2(renderW * 0.03, 0); // nudge = "behind"
+      final parentTopLeft = topLeft['$parentName-far'] ?? topLeft[parentName] ?? ui.Offset.zero;
+      final x = bindPoseXform(part, parentTopLeft, renderW, renderHeight);
       final comp = SpriteComponent(
         sprite: far,
-        size: bbox,
+        size: bboxOf(part),
         anchor: Anchor(part.pivot.dx, part.pivot.dy),
         priority: part.z - 3, // behind the torso
-      )..position = pw - parentPivot;
+      )..position = v(x.localPos + nudge);
       parentComp.add(comp);
       _joints['$base-far'] = comp;
+      topLeft['$base-far'] = x.worldTopLeft + nudge;
     }
   }
 

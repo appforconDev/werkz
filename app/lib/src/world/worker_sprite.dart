@@ -12,7 +12,9 @@ import '../models/werkz_event.dart';
 // room's floor band, its state driven by these mappings. Gated by
 // [debugWorkerSprites] — nothing mounts into shipping UI yet.
 
-/// Master switch — the sprite layer is not wired into any shipping screen yet.
+/// Master gate + default for the WORKERS toggle (task 19h). Stays false in the
+/// repo — Rickard enables workers via the LAYOUT TUNING panel's WORKERS switch,
+/// never by editing this line. The sprite layer is debug-only, not in shipping UI.
 const bool debugWorkerSprites = false;
 
 /// THE RIG CONTRACT (task 19c — now the CODE API after 19e dropped Rive). The
