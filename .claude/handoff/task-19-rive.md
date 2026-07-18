@@ -25,6 +25,20 @@ the Rive editor (rive.app); the `rive` runtime package (0.14.9) and `flame_rive`
   and the documented Rive wiring. `flame_rive` is in pubspec (eval done: resolves
   against flame 1.37). Nothing mounts into shipping UI yet (`debugWorkerSprites=false`).
 
+## ⚠ RESOLUTION CAVEAT (task 19b) — decide before rigging
+
+The master poses are LOW-RES: 237 / 266 / 261 px tall (7A19 / 3C57 / 9B72),
+~0.6× the 420 px physical render target on iPhone 12 @3x — they upscale from day
+one. A hi-res re-cut from the approved sheets is NOT possible while keeping the
+manifest valid: the idle-stand pose only exists in the pose sheet at that size,
+and the bigger turnaround views are a different pose (fractions break) and, for
+7A19/9B72, not true side profiles. Full analysis + evidence:
+`assets-pipeline/sprites/parts/_hires-report/REPORT.md`. The clean fix is a fresh
+generation of dedicated large true-left-profile masters (task 19c, needs
+Rickard's go-ahead). If you rig from the current masters, expect soft edges at
+render size, or wait for 19c. Do NOT re-cut from the turnarounds — the angle/pose
+is wrong.
+
 ## Rickard's editor session (mechanical, follow the manifest)
 
 1. New Rive file per persona; import `master-idle.png` (or re-cut higher-res from
