@@ -69,28 +69,23 @@ class _WorkerGame extends FlameGame {
     );
     _worker = worker;
     await add(worker); // triggers worker.onLoad — throws loudly on a missing part
-    _place(); // onGameResize fires BEFORE onLoad (worker null then) — place now
+    _pushViewport(); // onGameResize fires BEFORE onLoad (worker null then) — do it now
   }
 
   @override
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
     _gameSize = gameSize;
-    _place();
+    _pushViewport();
   }
 
-  // Feet on the floor band, x from params.workerX (live). Anchor is bottomCenter,
-  // set by SkeletalWorker.onLoad, so this plants the feet at the band bottom.
-  void _place() {
+  // Hand the worker its floor band (width for the walk target, bottom = floor
+  // line). The worker owns its own x now (locomotion, task 19i) — the mount only
+  // supplies the viewport; it no longer pins the position every frame.
+  void _pushViewport() {
     final w = _worker;
     if (w == null || _gameSize.x == 0 || _gameSize.y == 0) return;
-    w.position = Vector2(_gameSize.x * w.params.workerX, _gameSize.y);
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    _place(); // keep x live as the workerX slider moves
+    w.setViewport(_gameSize.x, _gameSize.y);
   }
 
   /// Feed the newest daemon event to the worker (the pure mapping decides state).

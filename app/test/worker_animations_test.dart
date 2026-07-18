@@ -46,15 +46,18 @@ void main() {
     expect(scaled.h, const SkelParams().workerHeightPx);
   });
 
-  test('idle is calm (small angles), work-typing taps the forearm', () {
+  test('idle is calm (small angles), work-typing taps from the shoulder', () {
     const p = SkelParams();
     final idle = animatePose(WorkerAnim.idle, 0.3, p);
     for (final v in idle.angles.values) {
       expect(v.abs(), lessThan(0.2), reason: 'idle should be subtle');
     }
+    // Joint simplification (19i): the elbow is locked; the tap now comes from the
+    // shoulder (arm-upper), so that's what must oscillate.
     final t1 = animatePose(WorkerAnim.workTyping, 0.0, p);
     final t2 = animatePose(WorkerAnim.workTyping, 1 / (4 * p.typeHz), p); // quarter → tap extreme
-    expect((t1.angles['arm-lower']! - t2.angles['arm-lower']!).abs(), greaterThan(0.05),
-        reason: 'the typing forearm must oscillate');
+    expect((t1.angles['arm-upper']! - t2.angles['arm-upper']!).abs(), greaterThan(0.05),
+        reason: 'the typing shoulder must oscillate');
+    expect(t1.angles['arm-lower'], 0, reason: 'elbow locked');
   });
 }

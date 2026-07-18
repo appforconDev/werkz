@@ -45,6 +45,33 @@ const _farLimbs = ['leg-upper', 'arm-upper', 'leg-lower', 'arm-lower'];
   return (localPos: pw - parentTopLeft, worldTopLeft: worldTopLeft);
 }
 
+// ── Locomotion (task 19i, pure + unit-tested so device can't diverge) ──────────
+
+/// The signed x-scale for the facing direction. The sprite is authored LEFT-
+/// facing; moving RIGHT flips the whole sprite (negative x-scale, anchor is
+/// bottom-center so the feet stay put). [scale] is the positive height scale.
+double facingScaleX(double scale, bool movingRight) => movingRight ? -scale : scale;
+
+/// Step [current] toward [target] at [speedPx]/s for [dt], never overshooting —
+/// once within a frame's step it snaps to target (planted foot, no slide-past).
+double stepToward(double current, double target, double speedPx, double dt) {
+  final d = target - current;
+  final step = speedPx * dt;
+  if (d.abs() <= step) return target;
+  return current + (d > 0 ? step : -step);
+}
+
+/// Where a worker in [state] walks to, in game px. [homeX] is its idle post
+/// (workerX × width); the work station sits left, the coffee spot right — so a
+/// dispatch reads as walk-to-desk → type → walk-to-coffee → sip.
+double targetXFor(WorkerState state, double width, double homeX) => switch (state) {
+      WorkerState.idle => homeX,
+      WorkerState.walking => width * 0.32,
+      WorkerState.working => width * 0.32,
+      WorkerState.carrying => width * 0.32,
+      WorkerState.maintenance => width * 0.72,
+    };
+
 class SkeletalWorker extends PositionComponent {
   final RigManifest manifest;
   final String imageFolder; // Flame images prefix, e.g. 'workers/7a19'
@@ -58,6 +85,16 @@ class SkeletalWorker extends PositionComponent {
   double _rootBaseY = 0;
   double _buildHeight = 0; // the height the part tree was BUILT at (before params scale)
   final Map<String, SpriteComponent> _joints = {};
+  PositionComponent? _farGroup; // holds the mirrored far-side limbs BEHIND the torso
+
+  // Locomotion state (task 19i). The worker owns its own x on the floor band; the
+  // mount hands it the viewport. y is the floor line; x walks toward the state's
+  // target; facing flips the whole sprite when travelling right.
+  double _x = 0;
+  double _floorY = 0;
+  double _gameWidth = 0;
+  bool _placed = false;
+  bool _facingRight = false; // authored facing is LEFT
 
   SkeletalWorker({
     required this.manifest,
@@ -81,6 +118,18 @@ class SkeletalWorker extends PositionComponent {
   void onEvent(WerkzEvent e) {
     final next = workerStateForEvent(e);
     if (next != null) state = next;
+  }
+
+  /// The mount hands the worker its floor band: total [width] (for target x) and
+  /// the [floorY] its feet sit on. First call plants it at its home post.
+  void setViewport(double width, double floorY) {
+    _gameWidth = width;
+    _floorY = floorY;
+    if (!_placed && width > 0) {
+      _x = width * params.workerX;
+      _placed = true;
+      position = Vector2(_x, _floorY);
+    }
   }
 
   @override
@@ -140,27 +189,38 @@ class SkeletalWorker extends PositionComponent {
     build(root, this, ui.Offset.zero);
     _rootBaseY = _joints[root.name]!.position.y;
 
-    // Far-side chain: each far limb parents to its parent's far variant if there
-    // is one, else the near parent — mirrored geometry, nudged + painted behind.
-    // Same top-left rule; _farLimbs is ordered uppers-before-lowers.
-    final nudge = ui.Offset(renderW * 0.05, 0);
+    // Far-side chain in a BACK-LAYER GROUP (task 19i extra-arm fix). A Flame child
+    // ALWAYS paints on top of its parent, so a far limb parented to the near torso
+    // could never be occluded by it — that was the "extra arm beside the torso".
+    // Instead the far limbs live in [_farGroup], a sibling of the torso with a
+    // lower priority, so the whole far side paints BEHIND the torso; at rest the
+    // far arm sits fully inside the torso silhouette and is hidden. The group
+    // tracks the torso's bob in update() so near + far move together.
+    final farGroup = PositionComponent(size: size, priority: root.z - 10);
+    _farGroup = farGroup;
+    add(farGroup);
+    // Positions are in render space (root frame); a top far limb parents to the
+    // group (top-left = origin), a lower one to its own upper-far variant.
+    final nudge = ui.Offset(renderW * 0.03, 0); // small depth parallax, kept inside the torso
     for (final base in _farLimbs) {
       final far = sprites['$base-far'];
       final part = manifest.part(base);
       if (far == null || part == null) continue;
       final parentName = part.attachParent;
-      final parentComp = _joints['$parentName-far'] ?? _joints[parentName] ?? this;
-      final parentTopLeft = topLeft['$parentName-far'] ?? topLeft[parentName] ?? ui.Offset.zero;
+      final upperFar = _joints['$parentName-far'];
+      final parentComp = upperFar ?? farGroup;
+      final parentTopLeft = topLeft['$parentName-far'] ?? ui.Offset.zero;
       final x = bindPoseXform(part, parentTopLeft, renderW, renderHeight);
+      final applyNudge = upperFar == null; // only the top limb offsets; children inherit
       final comp = SpriteComponent(
         sprite: far,
         size: bboxOf(part),
         anchor: Anchor(part.pivot.dx, part.pivot.dy),
-        priority: part.z - 3, // behind the torso
-      )..position = v(x.localPos + nudge);
+        priority: part.z,
+      )..position = v(applyNudge ? x.localPos + nudge : x.localPos);
       parentComp.add(comp);
       _joints['$base-far'] = comp;
-      topLeft['$base-far'] = x.worldTopLeft + nudge;
+      topLeft['$base-far'] = x.worldTopLeft + (applyNudge ? nudge : ui.Offset.zero);
     }
   }
 
@@ -168,14 +228,40 @@ class SkeletalWorker extends PositionComponent {
   void update(double dt) {
     super.update(dt);
     _clock += dt;
-    // Live size: scale the whole worker (from the feet) to params.workerHeightPx,
-    // so the on-screen height is EXACTLY that regardless of the build math.
-    if (_buildHeight > 0) scale = Vector2.all(params.workerHeightPx / _buildHeight);
-    final pose = animatePose(animForState(state), _clock, params);
-    _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
-    final root = _joints[manifest.root.name];
-    if (root != null) root.position.y = _rootBaseY + pose.bobY;
+
+    // Locomotion (task 19i): walk toward the state's target x. While travelling,
+    // the walk cycle plays and the feet carry the body at walkSpeedPx; on arrival
+    // it snaps (no slide) and plays the state's stationary anim.
+    final s = _buildHeight > 0 ? params.workerHeightPx / _buildHeight : 1.0;
+    if (_placed) {
+      final home = _gameWidth * params.workerX;
+      final target = targetXFor(state, _gameWidth, home);
+      final moving = (target - _x).abs() > 0.5;
+      if (moving) _facingRight = target > _x;
+      _x = stepToward(_x, target, params.walkSpeedPx, dt);
+      position = Vector2(_x, _floorY);
+
+      final carrying = state == WorkerState.carrying;
+      final anim = moving
+          ? (carrying ? WorkerAnim.carryWalk : WorkerAnim.walk)
+          : _stationaryAnim(animForState(state));
+      final pose = animatePose(anim, _clock, params);
+      _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
+      final root = _joints[manifest.root.name];
+      if (root != null) root.position.y = _rootBaseY + pose.bobY;
+      _farGroup?.position = Vector2(0, pose.bobY); // far side tracks the torso bob
+      // Whole-sprite mirror for facing (same mechanism as the far-side limbs).
+      scale = Vector2(facingScaleX(s, _facingRight), s);
+    } else {
+      // Not yet placed (viewport unknown): hold bind pose at the built size.
+      if (_buildHeight > 0) scale = Vector2.all(s);
+    }
   }
+
+  /// A walk/carry-walk anim with the feet planted becomes idle (no in-place
+  /// marching); stationary states pass through unchanged.
+  WorkerAnim _stationaryAnim(WorkerAnim a) =>
+      (a == WorkerAnim.walk || a == WorkerAnim.carryWalk) ? WorkerAnim.idle : a;
 }
 
 /// Pure geometry helper (unit-testable): a part's pivot position in render px.

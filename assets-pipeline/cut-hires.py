@@ -24,7 +24,24 @@ COLORS = {"head":(255,80,80),"torso":(80,180,255),"arm-upper":(80,255,120),"arm-
           "leg-upper":(255,200,60),"leg-lower":(220,160,40),"tool-belt":(200,120,255),
           "clipboard":(200,120,255),"apron":(200,120,255)}
 
-def isolate(src, thr=175, feather=1.5):
+def defringe(a, decontam_rgba=None):
+    # Edge decontamination (task 19i halo fix). CLOSE the matte (dilate→erode) to
+    # fill anti-alias pinholes, then ERODE 1px to pull the edge INSIDE the bright
+    # fringe ring that a plain threshold leaves — that ring was the halo. A hair of
+    # feather restores clean AA. Previously we DILATED (MaxFilter 5), which did the
+    # opposite: it grew the matte over background pixels and MADE the halo.
+    a = a.filter(ImageFilter.MaxFilter(3)).filter(ImageFilter.MinFilter(3))  # close
+    a = a.filter(ImageFilter.MinFilter(3))  # erode 1px → drop the fringe
+    a = a.filter(ImageFilter.GaussianBlur(0.6))
+    if decontam_rgba is not None:  # zero RGB where fully transparent → no bright bleed on scale
+        ap = a.load(); px = decontam_rgba.load(); W, H = decontam_rgba.size
+        for y in range(H):
+            for x in range(W):
+                if ap[x, y] == 0 and px[x, y][3] != 0:
+                    px[x, y] = (0, 0, 0, 0)
+    return a
+
+def isolate(src, thr=175):
     im = Image.open(src).convert("RGB"); W,H = im.size; px = im.load()
     fg = [[(0.299*px[x,y][0]+0.587*px[x,y][1]+0.114*px[x,y][2]) < thr for x in range(W)] for y in range(H)]
     seen = [[False]*W for _ in range(H)]; best=[]; bestn=0
@@ -41,14 +58,27 @@ def isolate(src, thr=175, feather=1.5):
                 if len(comp)>bestn: bestn=len(comp); best=comp
     a=Image.new("L",(W,H),0); ap=a.load()
     for c in best: ap[c[0],c[1]]=255
-    a=a.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(feather))
-    res=Image.open(src).convert("RGBA"); res.putalpha(a); bb=a.getbbox()
+    res=Image.open(src).convert("RGBA")
+    a=defringe(a, decontam_rgba=res)
+    res.putalpha(a); bb=a.getbbox()
     return res.crop(bb) if bb else res
+
+def load_master(persona):
+    # Prefer Rickard's hand-cleaned transparent cutout when it exists (task 19i);
+    # only decontaminate its edge. Otherwise threshold-isolate attempt1-1.
+    clean = f"{ROOT}/sprites/hires-candidates/{persona}/master-clean.png"
+    if os.path.exists(clean):
+        res = Image.open(clean).convert("RGBA")
+        a = defringe(res.split()[3], decontam_rgba=res)
+        res.putalpha(a); bb = a.getbbox()
+        print(persona, "using hand-cleaned master-clean.png")
+        return res.crop(bb) if bb else res
+    return isolate(f"{ROOT}/sprites/hires-candidates/{persona}/attempt1-1.png")
 
 for p in ["7a19","3c57","9b72"]:
     m = json.load(open(f"{ROOT}/sprites/parts/{p}/rig-manifest.json"))
     outdir = f"{ROOT}/sprites/parts-hires/{p}"; os.makedirs(outdir, exist_ok=True)
-    master = isolate(f"{ROOT}/sprites/hires-candidates/{p}/attempt1-1.png")
+    master = load_master(p)
     master.save(f"{outdir}/master-idle.png")
     W,H = master.size
     for part in m["parts"]:
