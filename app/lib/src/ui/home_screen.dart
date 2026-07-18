@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../daemon/daemon_client.dart';
 import '../models/werkz_event.dart';
 import '../models/preflight.dart';
+import '../world/worker_model.dart' show roomForEvent;
 import '../state/providers.dart';
 import '../state/layout_tuning.dart';
 import '../state/narration.dart';
@@ -48,7 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _activeRoom(WorkshopState ws) {
     if (ws.topDecision != null) return ws.topDecision!.room;
     for (final e in ws.feed.reversed) {
-      final room = e.payload['room'] as String?;
+      final room = roomForEvent(e); // shared mapping — the worker model uses the same (task 20a)
       if (room != null) return room;
     }
     return 'workshop-floor';

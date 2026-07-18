@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
 import '../../state/skel_tuning.dart';
+import '../../state/worker_model_provider.dart';
 import '../theme.dart';
 
 // LAYOUT TUNING (task 17 / 17b) — debug builds only. A COMPACT, DRAGGABLE overlay
@@ -188,6 +189,7 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
         ]),
       ),
       _stateForcer(),
+      _workerReadout(),
       _slider('worker height', sp.workerHeightPx, 50, 300, (v) => spc.update(sp.copyWith(workerHeightPx: v)), decimals: 0),
       _slider('worker x', sp.workerX, 0, 1, (v) => spc.update(sp.copyWith(workerX: v)), decimals: 2),
       _slider('walk hz', sp.walkHz, 0.3, 3, (v) => spc.update(sp.copyWith(walkHz: v))),
@@ -246,6 +248,29 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
           ),
         ),
       ]),
+    );
+  }
+
+  // Per-worker model readout (task 20a) — watch assignment + room membership tick
+  // before any transit visuals exist: name · room · status · job.
+  Widget _workerReadout() {
+    final model = ref.watch(workerModelProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('MODEL', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
+          for (final w in model.workers)
+            Text(
+              '${w.personaId}  ${w.currentRoom}  ${w.status.name}${w.jobId != null ? '  job:${w.jobId}' : ''}',
+              style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontSize: 8),
+            ),
+          if (model.queue.isNotEmpty)
+            Text('queued: ${model.queue.join(", ")}',
+                style: const TextStyle(fontFamily: Werkz.mono, color: Werkz.stampRed, fontSize: 8)),
+        ],
+      ),
     );
   }
 
