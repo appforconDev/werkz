@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
+import '../../state/skel_tuning.dart';
+import '../../world/worker_layer.dart';
 import '../theme.dart';
 
 // Interim stacked building (pre-Flame). Building order is CANON:
@@ -38,6 +40,9 @@ class StackedWorkshop extends ConsumerWidget {
     ];
     final sumW = order.fold<double>(0, (s, r) => s + r.$6);
     final sumSeams = order.fold<double>(0, (s, r) => s + r.$7);
+    // Debug worker (task 19f): Bolt stands on the WORKSHOP FLOOR band. Gated —
+    // zero footprint when the flag is false (the repo default).
+    final showWorker = ref.watch(debugWorkerSpritesProvider);
 
     return Container(
       color: Werkz.gunmetal,
@@ -61,14 +66,26 @@ class StackedWorkshop extends ConsumerWidget {
                   if (i > 0) _FloorSlab(height: order[i].$7),
                   SizedBox(
                     height: heightFor(order[i].$6),
-                    child: _RoomPanel(
-                      asset: order[i].$2,
-                      label: order[i].$3,
-                      active: order[i].$1 == activeRoom,
-                      fit: order[i].$4,
-                      align: order[i].$5,
-                      chipTopInset: 4,
-                    ),
+                    child: (showWorker && order[i].$1 == 'workshop-floor')
+                        ? Stack(children: [
+                            Positioned.fill(
+                              child: _RoomPanel(
+                                asset: order[i].$2, label: order[i].$3,
+                                active: order[i].$1 == activeRoom,
+                                fit: order[i].$4, align: order[i].$5, chipTopInset: 4,
+                              ),
+                            ),
+                            // Feet on the floor band (a touch above the seam).
+                            const Positioned(left: 0, right: 0, bottom: 4, height: 160, child: WorkerLayer()),
+                          ])
+                        : _RoomPanel(
+                            asset: order[i].$2,
+                            label: order[i].$3,
+                            active: order[i].$1 == activeRoom,
+                            fit: order[i].$4,
+                            align: order[i].$5,
+                            chipTopInset: 4,
+                          ),
                   ),
                 ],
               ],
