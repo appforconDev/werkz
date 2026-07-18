@@ -1,0 +1,126 @@
+{
+  "persona": "WX-7A19",
+  "name": "Bolt K. Fixit",
+  "body": "round generalist",
+  "master": "master-idle.png",
+  "note": "Regions/pivots are fractions of the master bbox (resolution-independent). Part PNGs are a flat-cut SCAFFOLD — occlusion (torso behind arms/legs) must be inpainted in the editor, and far-side arm/leg are mirror duplicates added there.",
+  "parts": [
+    {
+      "name": "torso",
+      "masterRegion": {
+        "x0": 0.05,
+        "y0": 0.18,
+        "x1": 0.95,
+        "y1": 0.72
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.2
+      },
+      "z": 0,
+      "attachParent": null
+    },
+    {
+      "name": "head",
+      "masterRegion": {
+        "x0": 0.18,
+        "y0": 0,
+        "x1": 0.98,
+        "y1": 0.34
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.92
+      },
+      "z": 5,
+      "attachParent": "torso"
+    },
+    {
+      "name": "tool-belt",
+      "masterRegion": {
+        "x0": 0.05,
+        "y0": 0.55,
+        "x1": 0.95,
+        "y1": 0.7
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "z": 2,
+      "attachParent": "torso"
+    },
+    {
+      "name": "arm-upper",
+      "masterRegion": {
+        "x0": 0.5,
+        "y0": 0.3,
+        "x1": 0.84,
+        "y1": 0.52
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.12
+      },
+      "z": 3,
+      "attachParent": "torso"
+    },
+    {
+      "name": "arm-lower",
+      "masterRegion": {
+        "x0": 0.42,
+        "y0": 0.48,
+        "x1": 0.8,
+        "y1": 0.74
+      },
+      "pivot": {
+        "x": 0.58,
+        "y": 0.12
+      },
+      "z": 4,
+      "attachParent": "arm-upper"
+    },
+    {
+      "name": "leg-upper",
+      "masterRegion": {
+        "x0": 0.28,
+        "y0": 0.62,
+        "x1": 0.62,
+        "y1": 0.82
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.12
+      },
+      "z": 1,
+      "attachParent": "torso"
+    },
+    {
+      "name": "leg-lower",
+      "masterRegion": {
+        "x0": 0.26,
+        "y0": 0.8,
+        "x1": 0.64,
+        "y1": 1
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.12
+      },
+      "z": 1,
+      "attachParent": "leg-upper"
+    }
+  ],
+  "animationsV1": {
+    "idle": "weight shift + slow head look (reference: idle-stand)",
+    "walk": "contact + passing keys drive the cycle (reference: walk-contact, walk-passing)",
+    "work-typing": "looped forearm tap at desk height (reference: work-typing)",
+    "carry-walk": "walk with both arms forward holding a crate (reference: work-carry)",
+    "coffee-idle": "relaxed idle, one hand holding a mug (reference: maintenance-coffee)"
+  },
+  "stateMachineInputs": {
+    "speed": "number 0..1 — 0 idle, >0 blends toward the walk cycle (tempo data-driven later)",
+    "mood": "number 0/1/2 — 0 routine, 1 busy, 2 maintenance (Rive has NO string/enum input; task 19c)",
+    "carrying": "bool — swaps walk for carry-walk"
+  }
+}

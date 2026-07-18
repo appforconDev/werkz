@@ -1,36 +1,36 @@
-import 'package:flame/components.dart';
 import '../models/werkz_event.dart';
 
-// P2 world-layer PREP (task 19, part 3). A WorkerSprite is one robot worker on
-// the room floor band, driven by the WerkzEvent stream. This is a SKELETON: the
-// event→state mapping is real and testable now, but the visual is a Rive artboard
-// (`flame_rive`) that only exists once Rickard rigs the persona in the Rive editor
-// — so nothing here mounts into the shipping UI. Gated by [debugWorkerSprites].
+// Worker state model + the rig contract (task 19 → 19e). The WerkzEvent→state
+// mapping and the name/input contract live here (pure, testable); the RENDERER is
+// SkeletalWorker (skeletal_worker.dart), a Flame component that animates the cut
+// parts with coded joint rotations. Rive was dropped in 19e (paywalled export) —
+// the rig manifest is the rig, played programmatically. Everything still builds
+// against this 19c contract, so Rive could be revisited post-beta.
 //
 // The interim building is still pure-Flutter widgets (StackedWorkshop); when the
-// Flame world layer lands, a WorkerSprite is added per active worker, positioned
-// on its room's floor band, and `onEvent` maps daemon events to animation states.
+// Flame world layer lands, a SkeletalWorker is added per active worker on its
+// room's floor band, its state driven by these mappings. Gated by
+// [debugWorkerSprites] — nothing mounts into shipping UI yet.
 
 /// Master switch — the sprite layer is not wired into any shipping screen yet.
 const bool debugWorkerSprites = false;
 
-/// THE RIVE NAME CONTRACT (task 19c). Rive resolves everything by exact string
-/// name at runtime, so these are pinned here AND in the handoff runbook; the
-/// editor must use them verbatim and the follow-up wiring validates against them
-/// (a missing name is a debug assert + logged warning, never a silent no-op).
-/// kebab-case throughout. The artboard + state machine are both `worker` (one per
-/// file; persona identity lives in the filename, e.g. wx-7a19-bolt.riv).
+/// THE RIG CONTRACT (task 19c — now the CODE API after 19e dropped Rive). The
+/// animation names are the coded [WorkerAnim] families; the input names/types are
+/// what [inputsForState] emits. Kept intact so a Rive revisit post-beta drops
+/// straight back onto it. kebab-case throughout. `artboard`/`stateMachine` are
+/// retained as the persona rig id (historical Rive labels, harmless).
 abstract final class WorkerRig {
   static const String artboard = 'worker';
   static const String stateMachine = 'worker';
 
-  // Inputs — Rive supports only number / boolean / trigger (NO string/enum).
+  // Inputs — a number / boolean set (also valid Rive input types).
   static const String inputSpeed = 'speed'; // number 0..1
   static const String inputMood = 'mood'; // number 0/1/2 (see WorkerMood)
   static const String inputCarrying = 'carrying'; // boolean
   static const List<String> inputs = [inputSpeed, inputMood, inputCarrying];
 
-  // Animations (v1).
+  // Animations (v1) — coded joint animations in worker_animations.dart.
   static const String animIdle = 'idle';
   static const String animWalk = 'walk';
   static const String animWorkTyping = 'work-typing';
@@ -41,9 +41,9 @@ abstract final class WorkerRig {
   ];
 }
 
-/// Ambient mood. Rive has NO string/enum input, so mood is a NUMBER input on the
-/// state machine; each value is fixed by [riveValue] — never hand a magic number
-/// to Rive, go through this enum (task 19c).
+/// Ambient mood as a NUMBER (task 19c): each value fixed by [riveValue] — never a
+/// magic number at call sites, always through this enum. (Number chosen so a Rive
+/// revisit works too — Rive has no string/enum input type.)
 enum WorkerMood {
   routine(0),
   busy(1),
@@ -54,13 +54,13 @@ enum WorkerMood {
 }
 
 /// Animation states, one per approved pose family (task 18). Each maps to the
-/// Rive state-machine inputs declared in the per-persona rig manifests
+/// animation inputs declared in the per-persona rig manifests
 /// (`rig-manifest.json` under assets-pipeline): speed, mood, carrying.
 enum WorkerState { idle, walking, working, carrying, maintenance }
 
-/// The three Rive state-machine inputs a WorkerState resolves to — exactly
-/// `speed` (double 0..1), `mood` (double 0/1/2), `carrying` (bool). Kept as a
-/// plain value object so the mapping is unit-testable without a live .riv.
+/// The three animation inputs a WorkerState resolves to — exactly `speed`
+/// (double 0..1), `mood` (double 0/1/2), `carrying` (bool). A plain value object
+/// so the mapping is unit-testable; name kept (was Rive) for contract continuity.
 class RiveInputs {
   final double speed; // 0..1 — 0 idle, 1 full walk cycle
   final double mood; // WorkerMood.riveValue: 0 routine, 1 busy, 2 maintenance
@@ -96,8 +96,10 @@ WorkerState? workerStateForEvent(WerkzEvent e) {
   }
 }
 
-/// WorkerState → the Rive inputs the state machine blends on. mood always goes
-/// through [WorkerMood.riveValue] — no magic numbers.
+/// WorkerState → the animation inputs (speed/mood/carrying). mood always goes
+/// through [WorkerMood.riveValue] — no magic numbers. The renderer maps these to
+/// a [WorkerAnim] family (see worker_animations.dart); the value object is kept
+/// unit-testable and Rive-compatible.
 RiveInputs inputsForState(WorkerState s) => switch (s) {
       WorkerState.idle => RiveInputs(speed: 0, mood: WorkerMood.routine.riveValue, carrying: false),
       WorkerState.walking => RiveInputs(speed: 1, mood: WorkerMood.busy.riveValue, carrying: false),
@@ -105,36 +107,3 @@ RiveInputs inputsForState(WorkerState s) => switch (s) {
       WorkerState.carrying => RiveInputs(speed: 1, mood: WorkerMood.busy.riveValue, carrying: true),
       WorkerState.maintenance => RiveInputs(speed: 0, mood: WorkerMood.maintenance.riveValue, carrying: false),
     };
-
-/// Flame component skeleton. Holds the worker's identity + state and, once the
-/// persona's `.riv` exists, drives a `flame_rive` artboard's state machine.
-///
-/// Rive wiring (documented, not yet compiled — the .riv is Rickard's editor
-/// output): load `assets/rive/<persona>.riv`, take
-/// `StateMachineController.fromArtboard(artboard, WorkerRig.stateMachine)`, cache
-/// `findInput<double>(WorkerRig.inputSpeed)`, `findInput<double>(WorkerRig.inputMood)`
-/// and `findInput<bool>(WorkerRig.inputCarrying)`, and in [_apply] push
-/// [inputsForState] onto them. The follow-up wiring asserts every name in
-/// [WorkerRig] resolves (missing → debug assert + logged warning, never silent).
-/// Add the artboard as a child RiveComponent sized to the floor-band height,
-/// x-position walked by the walk cycle.
-class WorkerSprite extends PositionComponent {
-  final String persona; // 'WX-7A19' | 'WX-3C57' | 'WX-9B72'
-  WorkerState state;
-
-  WorkerSprite({required this.persona, this.state = WorkerState.maintenance});
-
-  /// Feed a daemon event; updates the animation state if the event maps to one.
-  void onEvent(WerkzEvent e) {
-    final next = workerStateForEvent(e);
-    if (next != null && next != state) {
-      state = next;
-      _apply();
-    }
-  }
-
-  void _apply() {
-    // TODO(P2 world layer): push inputsForState(state) onto the cached Rive
-    // state-machine inputs once the .riv artboard is loaded. No-op until then.
-  }
-}

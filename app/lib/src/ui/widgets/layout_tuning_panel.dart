@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
+import '../../state/skel_tuning.dart';
 import '../theme.dart';
 
 // LAYOUT TUNING (task 17 / 17b) — debug builds only. A COMPACT, DRAGGABLE overlay
@@ -153,10 +154,32 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
                 (v) => c.update(t.copyWith(bottomBarHeight: v))),
             _slider('bottom bar pad', t.bottomBarPad, 0, 24,
                 (v) => c.update(t.copyWith(bottomBarPad: v))),
+            ..._skelSliders(),
           ],
         ),
       ),
     );
+  }
+
+  // Skeletal-worker animation params (task 19e) — live-tuned like the layout
+  // constants; the debug worker layer reads skelParamsProvider.
+  List<Widget> _skelSliders() {
+    final sp = ref.watch(skelParamsProvider);
+    final spc = ref.read(skelParamsProvider.notifier);
+    return [
+      const Padding(
+        padding: EdgeInsets.only(top: 8, bottom: 4),
+        child: Text('— SKELETAL (debug workers) —',
+            style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
+      ),
+      _slider('walk hz', sp.walkHz, 0.5, 4, (v) => spc.update(sp.copyWith(walkHz: v))),
+      _slider('leg swing', sp.legSwing, 0, 1.2, (v) => spc.update(sp.copyWith(legSwing: v)), decimals: 2),
+      _slider('arm swing', sp.armSwing, 0, 1.2, (v) => spc.update(sp.copyWith(armSwing: v)), decimals: 2),
+      _slider('bob px', sp.bob, 0, 20, (v) => spc.update(sp.copyWith(bob: v)), decimals: 0),
+      _slider('head bob', sp.headBob, 0, 0.3, (v) => spc.update(sp.copyWith(headBob: v)), decimals: 2),
+      _slider('type hz', sp.typeHz, 1, 6, (v) => spc.update(sp.copyWith(typeHz: v))),
+      _slider('type swing', sp.typeSwing, 0, 1, (v) => spc.update(sp.copyWith(typeSwing: v)), decimals: 2),
+    ];
   }
 
   // Per-room fit-mode toggle: COVER | FIT-H (task 17c).

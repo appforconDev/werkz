@@ -35,10 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   flame: ^1.37.0
-  # P2 world layer (task 19): Rive-rigged worker sprites in the Flame layer.
-  # Declared now (package eval done — depends on flame ^1.37.0, matches); wired
-  # in once Rickard exports the persona .riv artboards from the Rive editor.
-  flame_rive: ^1.11.1
+  # (task 19e) Rive dropped — .riv export went behind a paywall. The worker
+  # sprites are a programmatic Flame-native skeletal player (src/world/), so
+  # flame_rive + rive are removed. The 19c contract survives as the code API, so
+  # Rive can be revisited post-beta if desired.
   flutter_riverpod: ^3.3.2
   mobile_scanner: ^7.3.0
   flutter_secure_storage: ^10.3.1
@@ -84,6 +84,10 @@ flutter:
     - assets/art/workshop-floor.png
     - assets/art/advisors-office.png
     - assets/art/archive.png
+    # Worker skeletal-sprite parts + rig manifest (task 19e, debug-gated). Bolt
+    # first — the other two personas' parts land when they're bundled.
+    - assets/images/workers/7a19/
+    - assets/workers/7a19/rig-manifest.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -4,6 +4,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:werkz_app/src/models/werkz_event.dart';
 import 'package:werkz_app/src/world/worker_sprite.dart';
+import 'package:werkz_app/src/world/rig_manifest.dart';
+import 'package:werkz_app/src/world/skeletal_worker.dart';
 
 WerkzEvent _e(String type) => WerkzEvent(
       eventId: 'x', timestamp: '', eventType: type, severity: 'info', workerId: 'WX-7A19', payload: const {});
@@ -56,8 +58,14 @@ void main() {
     }
   });
 
-  test('WorkerSprite advances state on a mapped event, ignores unmapped', () {
-    final w = WorkerSprite(persona: 'WX-7A19');
+  test('SkeletalWorker advances state on a mapped event, ignores unmapped', () {
+    final m = RigManifest.fromJson({
+      'persona': 'X',
+      'parts': [
+        {'name': 'torso', 'masterRegion': {'x0': 0, 'y0': 0, 'x1': 1, 'y1': 1}, 'pivot': {'x': .5, 'y': .5}, 'z': 0, 'attachParent': null},
+      ],
+    });
+    final w = SkeletalWorker(manifest: m, imageFolder: 'x', loadSprite: (_) async => null);
     expect(w.state, WorkerState.maintenance);
     w.onEvent(_e('worker.dispatched'));
     expect(w.state, WorkerState.walking);
