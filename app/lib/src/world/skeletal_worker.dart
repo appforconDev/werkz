@@ -80,6 +80,7 @@ class SkeletalWorker extends PositionComponent {
 
   WorkerState state;
   SkelParams params;
+  ForcedSkelState forced = ForcedSkelState.auto; // debug override (task 19j)
 
   double _clock = 0;
   double _rootBaseY = 0;
@@ -95,6 +96,7 @@ class SkeletalWorker extends PositionComponent {
   double _gameWidth = 0;
   bool _placed = false;
   bool _facingRight = false; // authored facing is LEFT
+  bool _patrolRight = true; // walk-loop direction (task 19j): true = toward coffee
 
   SkeletalWorker({
     required this.manifest,
@@ -114,8 +116,10 @@ class SkeletalWorker extends PositionComponent {
     }
   }
 
-  /// Feed a daemon event; the pure mapping in worker_sprite.dart decides the state.
+  /// Feed a daemon event; the pure mapping in worker_sprite.dart decides the
+  /// state. A forced state (task 19j) overrides real events until set to auto.
   void onEvent(WerkzEvent e) {
+    if (forced != ForcedSkelState.auto) return;
     final next = workerStateForEvent(e);
     if (next != null) state = next;
   }
@@ -229,22 +233,47 @@ class SkeletalWorker extends PositionComponent {
     super.update(dt);
     _clock += dt;
 
-    // Locomotion (task 19i): walk toward the state's target x. While travelling,
-    // the walk cycle plays and the feet carry the body at walkSpeedPx; on arrival
-    // it snaps (no slide) and plays the state's stationary anim.
+    // Locomotion (task 19i) + debug state forcer (task 19j). AUTO walks toward the
+    // event-driven state's target x; a forced state overrides it: walk-loop
+    // patrols desk↔coffee forever (turning at each end), the rest loop in place.
     final s = _buildHeight > 0 ? params.workerHeightPx / _buildHeight : 1.0;
     if (_placed) {
       final home = _gameWidth * params.workerX;
-      final target = targetXFor(state, _gameWidth, home);
-      final moving = (target - _x).abs() > 0.5;
-      if (moving) _facingRight = target > _x;
-      _x = stepToward(_x, target, params.walkSpeedPx, dt);
+      final deskX = targetXFor(WorkerState.working, _gameWidth, home);
+      final coffeeX = targetXFor(WorkerState.maintenance, _gameWidth, home);
+
+      // Resolve the state to animate + where (if anywhere) to walk.
+      final WorkerState animState;
+      double? moveTarget; // null = stand and loop in place
+      switch (forced) {
+        case ForcedSkelState.auto:
+          animState = state;
+          moveTarget = targetXFor(state, _gameWidth, home);
+        case ForcedSkelState.walkLoop:
+          animState = WorkerState.walking;
+          moveTarget = _patrolRight ? coffeeX : deskX;
+        case ForcedSkelState.idle:
+          animState = WorkerState.idle;
+        case ForcedSkelState.workTyping:
+          animState = WorkerState.working;
+        case ForcedSkelState.coffeeIdle:
+          animState = WorkerState.maintenance;
+      }
+
+      var moving = false;
+      if (moveTarget != null) {
+        moving = (moveTarget - _x).abs() > 0.5;
+        if (moving) _facingRight = moveTarget > _x;
+        _x = stepToward(_x, moveTarget, params.walkSpeedPx, dt);
+        // walk-loop: on arrival, flip the patrol direction → carry on forever.
+        if (!moving && forced == ForcedSkelState.walkLoop) _patrolRight = !_patrolRight;
+      }
       position = Vector2(_x, _floorY);
 
-      final carrying = state == WorkerState.carrying;
+      final carrying = animState == WorkerState.carrying;
       final anim = moving
           ? (carrying ? WorkerAnim.carryWalk : WorkerAnim.walk)
-          : _stationaryAnim(animForState(state));
+          : _stationaryAnim(animForState(animState));
       final pose = animatePose(anim, _clock, params);
       _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
       final root = _joints[manifest.root.name];

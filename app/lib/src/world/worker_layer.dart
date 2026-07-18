@@ -32,6 +32,7 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     // Live wiring: new feed events → worker state; tuning sliders → params.
     ref.listen<WorkshopState>(workshopProvider, (_, next) => _game.pushFeed(next.feed));
     _game.applyParams(ref.watch(skelParamsProvider));
+    _game.applyForced(ref.watch(forcedSkelStateProvider));
     return GameWidget(
       game: _game,
       backgroundBuilder: (_) => const SizedBox(),
@@ -99,4 +100,5 @@ class _WorkerGame extends FlameGame {
   }
 
   void applyParams(SkelParams params) => _worker?.params = params;
+  void applyForced(ForcedSkelState forced) => _worker?.forced = forced;
 }

@@ -6,6 +6,7 @@ import 'package:werkz_app/src/models/werkz_event.dart';
 import 'package:werkz_app/src/world/worker_sprite.dart';
 import 'package:werkz_app/src/world/rig_manifest.dart';
 import 'package:werkz_app/src/world/skeletal_worker.dart';
+import 'package:werkz_app/src/world/worker_animations.dart';
 
 WerkzEvent _e(String type) => WerkzEvent(
       eventId: 'x', timestamp: '', eventType: type, severity: 'info', workerId: 'WX-7A19', payload: const {});
@@ -73,5 +74,28 @@ void main() {
     expect(w.state, WorkerState.walking);
     w.onEvent(_e('task.started'));
     expect(w.state, WorkerState.working);
+  });
+
+  test('a forced state (task 19j) ignores events; AUTO resumes them', () {
+    final m = RigManifest.fromJson({
+      'persona': 'X',
+      'parts': [
+        {'name': 'torso', 'masterRegion': {'x0': 0, 'y0': 0, 'x1': 1, 'y1': 1}, 'pivot': {'x': .5, 'y': .5}, 'z': 0, 'attachParent': null},
+      ],
+    });
+    final w = SkeletalWorker(manifest: m, imageFolder: 'x', loadSprite: (_) async => null);
+    w.state = WorkerState.idle;
+
+    // Forced → real events are ignored, state stays put.
+    w.forced = ForcedSkelState.walkLoop;
+    w.onEvent(_e('worker.dispatched')); // would map to walking under AUTO
+    expect(w.state, WorkerState.idle);
+    w.onEvent(_e('task.started'));
+    expect(w.state, WorkerState.idle);
+
+    // Back to AUTO → events drive the state again.
+    w.forced = ForcedSkelState.auto;
+    w.onEvent(_e('worker.dispatched'));
+    expect(w.state, WorkerState.walking);
   });
 }

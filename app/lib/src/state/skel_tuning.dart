@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../world/worker_animations.dart';
 import '../world/worker_sprite.dart' show debugWorkerSprites;
 
+export '../world/worker_animations.dart' show ForcedSkelState;
+
 // The mount gate as a live toggle (task 19h). The panel's WORKERS switch flips it
 // in-app, so Rickard never edits the const again. It DEFAULTS to the const
 // [debugWorkerSprites] (the master gate — false in the repo), so the repo build
@@ -28,4 +30,15 @@ class SkelParamsController extends Notifier<SkelParams> {
   SkelParams build() => const SkelParams();
   void update(SkelParams p) => state = p;
   void reset() => state = const SkelParams();
+}
+
+// Debug state forcer (task 19j) — pins the worker to a sustained state so Rickard
+// can tune sliders against it; auto = follow real events (shipping behaviour).
+final forcedSkelStateProvider =
+    NotifierProvider<ForcedSkelStateController, ForcedSkelState>(ForcedSkelStateController.new);
+
+class ForcedSkelStateController extends Notifier<ForcedSkelState> {
+  @override
+  ForcedSkelState build() => ForcedSkelState.auto;
+  void set(ForcedSkelState s) => state = s;
 }

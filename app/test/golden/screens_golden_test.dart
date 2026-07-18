@@ -13,6 +13,7 @@ import 'package:werkz_app/src/ui/onboard_screen.dart';
 import 'package:werkz_app/src/ui/first_run_screen.dart';
 import 'package:werkz_app/src/ui/home_screen.dart';
 import 'package:werkz_app/src/ui/settings_screen.dart';
+import 'package:werkz_app/src/ui/widgets/layout_tuning_panel.dart';
 import 'harness.dart';
 
 const _bashDecision = PendingDecision(
@@ -163,6 +164,27 @@ void main() {
           ],
           child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const HomeScreen()),
         ));
+  });
+
+  // The SKELETAL section scrolled into view, so the new STATE forcer (task 19j)
+  // + walk-speed slider are actually screenshot-checked (they sit below the fold
+  // of home_layout_tuning).
+  testWidgets('home_skel_forcer', (t) async {
+    await pumpGoldenApp(t,
+        app: ProviderScope(
+          overrides: [
+            secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
+            daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+            workshopProvider.overrideWith(() => _SeededWorkshop(const WorkshopState(conn: ConnState.connected))),
+            layoutTuningPanelVisibleProvider.overrideWith(_VisiblePanel.new),
+          ],
+          child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const HomeScreen()),
+        ));
+    final panelScroll =
+        find.descendant(of: find.byType(LayoutTuningPanel), matching: find.byType(Scrollable)).first;
+    await t.scrollUntilVisible(find.text('STATE'), 120, scrollable: panelScroll);
+    await t.pumpAndSettle();
+    await expectGolden(t, 'home_skel_forcer');
   });
 }
 

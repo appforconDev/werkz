@@ -187,6 +187,7 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
           ),
         ]),
       ),
+      _stateForcer(),
       _slider('worker height', sp.workerHeightPx, 50, 300, (v) => spc.update(sp.copyWith(workerHeightPx: v)), decimals: 0),
       _slider('worker x', sp.workerX, 0, 1, (v) => spc.update(sp.copyWith(workerX: v)), decimals: 2),
       _slider('walk hz', sp.walkHz, 0.3, 3, (v) => spc.update(sp.copyWith(walkHz: v))),
@@ -198,6 +199,54 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('type hz', sp.typeHz, 1, 6, (v) => spc.update(sp.copyWith(typeHz: v))),
       _slider('type swing', sp.typeSwing, 0, 1, (v) => spc.update(sp.copyWith(typeSwing: v)), decimals: 2),
     ];
+  }
+
+  // STATE forcer (task 19j) — pin a sustained state so a walk/type/coffee cycle
+  // can be tuned without waiting on a real dispatch. AUTO = follow real events.
+  static const _forceLabels = <ForcedSkelState, String>{
+    ForcedSkelState.auto: 'AUTO',
+    ForcedSkelState.idle: 'IDLE',
+    ForcedSkelState.walkLoop: 'WALK',
+    ForcedSkelState.workTyping: 'TYPE',
+    ForcedSkelState.coffeeIdle: 'COFFEE',
+  };
+
+  Widget _stateForcer() {
+    final current = ref.watch(forcedSkelStateProvider);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(children: [
+        const SizedBox(
+          width: 46,
+          child: Text('STATE', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
+        ),
+        Expanded(
+          child: Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final e in _forceLabels.entries)
+                GestureDetector(
+                  onTap: () => ref.read(forcedSkelStateProvider.notifier).set(e.key),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: current == e.key ? Werkz.approvalGreen : Werkz.steel.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                    child: Text(e.value,
+                        style: TextStyle(
+                            fontFamily: Werkz.mono,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: current == e.key ? Werkz.oil : Werkz.cream)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ]),
+    );
   }
 
   // Per-room fit-mode toggle: COVER | FIT-H (task 17c).
