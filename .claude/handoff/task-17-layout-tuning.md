@@ -38,6 +38,16 @@ panel). Values PERSIST across restarts in debug (secure storage, key
 RESET clears it. When the numbers arrive, still just hardcode the `LayoutTuning`
 constructor defaults — including the three heights AND the three fit modes.
 
+## Task 17f — LAYOUT SAGA CLOSED (chips won)
+
+Rickard reverted the 17d/17e UI nameplates by design decision: back to corner
+floor-name chips + the thin steel slab (restored `stacked_workshop.dart` from
+git a0ef85b), and the advisor's baked bottom WERKZ-plate strip was cropped from
+the approved asset (892×474 → 892×445) so its art ends at the floor like the
+others — no double signage. Advisor stays on cover. Brand W asset removed. The
+signage question is settled; do not reopen it. Everything below (17d/17c) is
+historical context for WHY, not a live design.
+
 ## Task 17d — signage moved to the UI (the plate wasn't uniformly in the art)
 
 Verified the shipped assets: the advisor keeps a baked steel "⟨W⟩ WERKZ" rail at

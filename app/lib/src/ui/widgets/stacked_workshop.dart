@@ -4,16 +4,24 @@ import '../../state/layout_tuning.dart';
 import '../theme.dart';
 
 // Interim stacked building (pre-Flame). Building order is CANON:
-//   advisors-office = penthouse (top), workshop-floor = ground, archive = basement.
+//   advisors-office = penthouse (top, fixed)
+//   workshop-floor  = ground (middle)
+//   archive         = basement (bottom)
+// The baked steel frames are cropped out of the room images (task 11.4), so
+// storeys sit nearly edge to edge, separated by a single thin uniform floor
+// slab. Floor-name chips overlay each room's top-left corner. Rooms fill the
+// slab via BoxFit.cover. Inactive rooms dim.
 //
-// SIGNAGE LIVES IN THE UI (task 17d). The 16→17c saga chased a WERKZ plate that
-// the art can't deliver uniformly: the advisor asset kept a baked steel nameplate
-// rail (its frame was never re-cropped), while workshop/archive had theirs cropped
-// away by task 11.4 — so NO render setting could show a matching plate on all
-// three storeys. Fix: each storey is headed by a real 1955 brass/steel NAMEPLATE
-// widget (vector W + stenciled room name), drawn in the UI. Uniform, scalable,
-// and no image regeneration ever again. Rooms fill their slot via BoxFit.cover
-// (per-room fit is still tunable in debug, but cover is the default for all).
+// SIGNAGE = corner chips + thin slab (task 17f, reverting the 17e nameplate
+// experiment — Rickard prefers the original design). The advisor's baked bottom
+// WERKZ-plate strip was cropped from the approved asset in 17f (art now ends at
+// the floor/carpet edge like the other rooms), so there is no double signage
+// against the corner chip. Per-room heights + fit are still tunable in debug.
+//
+// SCROLLABLE, PER-ROOM HEIGHTS (task 17b). Each storey has its own slot height;
+// the stack scrolls when the storeys total more than the viewport, so a debug
+// tuning panel can never hide a seam. `scrollPadding` adds FOOT room (only) so a
+// bottom-docked tuning panel can be scrolled past without pushing the rooms down.
 class StackedWorkshop extends ConsumerWidget {
   final String activeRoom;
   final double scrollPadding;
@@ -22,10 +30,10 @@ class StackedWorkshop extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(layoutTuningProvider);
-    final order = <(String room, String asset, String label, RoomFit fit, double align, double height)>[
-      ('advisors-office', 'assets/art/advisors-office.png', "ADVISOR'S OFFICE", t.advisorFit, t.alignAdvisorY, t.advisorHeight),
-      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.workshopFit, t.alignWorkshopY, t.workshopHeight),
-      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.archiveFit, t.alignArchiveY, t.archiveHeight),
+    final order = <(String room, String asset, String label, RoomFit fit, double align, double height, double seamAbove)>[
+      ('advisors-office', 'assets/art/advisors-office.png', 'ADVISOR', t.advisorFit, t.alignAdvisorY, t.advisorHeight, 0),
+      ('workshop-floor', 'assets/art/workshop-floor.png', 'WORKSHOP FLOOR', t.workshopFit, t.alignWorkshopY, t.workshopHeight, t.seamAdvisorFloor),
+      ('archive', 'assets/art/archive.png', 'ARCHIVE', t.archiveFit, t.alignArchiveY, t.archiveHeight, t.seamFloorArchive),
     ];
 
     return Container(
@@ -34,14 +42,20 @@ class StackedWorkshop extends ConsumerWidget {
         padding: EdgeInsets.only(bottom: scrollPadding),
         child: Column(
           children: [
-            for (final r in order) ...[
-              // A brass/steel nameplate heads every storey (task 17d) — this is
-              // the storey divider AND its label, replacing the old floor slab and
-              // the corner chip.
-              _Nameplate(label: r.$3, active: r.$1 == activeRoom),
+            for (var i = 0; i < order.length; i++) ...[
+              // Explicit, IDENTICAL treatment at every seam (task 15 C3): a steel
+              // bar with a lit top edge. Height is per-seam tunable.
+              if (i > 0) _FloorSlab(height: order[i].$7),
               SizedBox(
-                height: r.$6,
-                child: _RoomPanel(asset: r.$2, active: r.$1 == activeRoom, fit: r.$4, align: r.$5),
+                height: order[i].$6,
+                child: _RoomPanel(
+                  asset: order[i].$2,
+                  label: order[i].$3,
+                  active: order[i].$1 == activeRoom,
+                  fit: order[i].$4,
+                  align: order[i].$5,
+                  chipTopInset: 4,
+                ),
               ),
             ],
           ],
@@ -51,68 +65,17 @@ class StackedWorkshop extends ConsumerWidget {
   }
 }
 
-// 1955 brass/steel nameplate: riveted plate, the vector W tinted to read on the
-// steel, and the stenciled room name. Active storey gets the approval-green
-// accent (carrying the old chip's "which room is live" affordance).
-class _Nameplate extends StatelessWidget {
-  final String label;
-  final bool active;
-  const _Nameplate({required this.label, required this.active});
-
+// A uniform steel floor slab between storeys (task 15 C3).
+class _FloorSlab extends StatelessWidget {
+  final double height;
+  const _FloorSlab({required this.height});
   @override
   Widget build(BuildContext context) {
-    final accent = active ? Werkz.approvalGreen : Werkz.kraft;
     return Container(
-      height: 30,
+      height: height,
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter, end: Alignment.bottomCenter,
-          colors: [Werkz.gunmetal, Werkz.machine],
-        ),
-        border: Border(
-          top: BorderSide(color: Werkz.steel, width: 1),
-          bottom: BorderSide(color: Werkz.oil, width: 1),
-        ),
-      ),
-      child: Stack(
-        children: [
-          const Positioned(left: 7, top: 0, bottom: 0, child: Center(child: _Rivet())),
-          const Positioned(right: 7, top: 0, bottom: 0, child: Center(child: _Rivet())),
-          Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ColorFiltered(
-                  colorFilter: ColorFilter.mode(accent, BlendMode.srcIn),
-                  child: Image.asset('assets/brand/werkz-w.png', height: 13),
-                ),
-                const SizedBox(width: 9),
-                Text(label,
-                    style: TextStyle(
-                      fontFamily: Werkz.mono,
-                      color: active ? Werkz.cream : Werkz.carbon,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 11,
-                      letterSpacing: 3,
-                    )),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Rivet extends StatelessWidget {
-  const _Rivet();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 4, height: 4,
-      decoration: BoxDecoration(
-        color: Werkz.oil, shape: BoxShape.circle,
-        border: Border.all(color: Werkz.steel, width: 0.5),
+        color: Werkz.gunmetal,
+        border: Border(top: BorderSide(color: Werkz.steel, width: 1)),
       ),
     );
   }
@@ -120,13 +83,18 @@ class _Rivet extends StatelessWidget {
 
 class _RoomPanel extends StatelessWidget {
   final String asset;
+  final String label;
   final bool active;
   final RoomFit fit;
   final double align; // fitHeight → X-pan; cover → Y-band
-  const _RoomPanel({required this.asset, required this.active, required this.fit, required this.align});
+  final double chipTopInset;
+  const _RoomPanel({required this.asset, required this.label, required this.active, required this.fit, required this.align, required this.chipTopInset});
 
   @override
   Widget build(BuildContext context) {
+    // fitHeight: full art height always shows (plate below the floor line
+    // guaranteed), sides crop against the screen width, align pans X.
+    // cover: fills both dims and crops, align picks the visible Y band.
     final boxFit = fit == RoomFit.fitHeight ? BoxFit.fitHeight : BoxFit.cover;
     final alignment = fit == RoomFit.fitHeight ? Alignment(align, 0) : Alignment(0, align);
     return ClipRect(
@@ -139,6 +107,16 @@ class _RoomPanel extends StatelessWidget {
           ),
           if (!active)
             const IgnorePointer(child: ColoredBox(color: Color(0x22000000))),
+          Positioned(
+            left: 6,
+            top: chipTopInset,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              color: (active ? Werkz.approvalGreen : Werkz.machine).withValues(alpha: 0.82),
+              child: Text(label,
+                  style: const TextStyle(fontFamily: Werkz.mono, fontSize: 8, color: Werkz.cream, letterSpacing: 1)),
+            ),
+          ),
         ],
       ),
     );

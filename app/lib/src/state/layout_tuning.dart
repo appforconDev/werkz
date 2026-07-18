@@ -8,15 +8,14 @@ import 'providers.dart' show secureStorageProvider;
 // numbers back, CC hardcodes them here. This ends the remote-guessing loop:
 // spacing is tuned where it renders, not estimated from goldens.
 //
-// PER-ROOM FIT MODE (task 17c — the actual root cause of 16/17/17b). BoxFit.cover
-// scales the art to fill BOTH the slot's width and height and crops the overflow,
-// so it can NEVER show the full art height: raising a room's height just zooms in
-// and crops MORE. The advisor's signage plate is baked BELOW its floor line, so
-// cover geometrically cannot reveal it. Fix: the advisor uses BoxFit.fitHeight —
-// the FULL art height always shows (plate guaranteed); the sides crop against the
-// screen width, and its align slider PANS X (which horizontal slice shows).
-// Workshop/archive keep cover + Y-band alignment because their signage is mid-art.
-// Per-room slot heights still set how much vertical space each storey gets; the
+// PER-ROOM FIT MODE (task 17c). BoxFit.cover scales the art to fill BOTH the
+// slot's width and height and crops the overflow, so it can never show the full
+// art height — raising a slot's height just zooms in and crops MORE. fitHeight
+// instead shows the full art height and crops the sides (align then pans X).
+// HISTORY: the advisor once used fitHeight to reveal a WERKZ plate baked below
+// its floor line — but that plate was cropped from the asset in 17f (signage is
+// the corner chips now), so ALL rooms default to cover. The toggle stays for
+// debug experiments. Per-room slot heights set each storey's vertical space; the
 // stack scrolls when the storeys exceed the viewport.
 enum RoomFit { cover, fitHeight }
 class LayoutTuning {
@@ -39,9 +38,9 @@ class LayoutTuning {
     this.appBarTopGap = 3,
     this.seamAdvisorFloor = 5,
     this.seamFloorArchive = 5,
-    // Task 17d: signage moved to the UI (brass nameplates), so the advisor no
-    // longer needs the fitHeight excursion — it's back to cover like the others.
-    // The per-room fit toggle stays in the tuning panel (harmless, still works).
+    // All rooms default to cover (task 17f): the advisor's plate was cropped from
+    // the asset, so it no longer needs the fitHeight excursion. The per-room fit
+    // toggle stays in the tuning panel (harmless, still works) for experiments.
     this.advisorFit = RoomFit.cover,
     this.workshopFit = RoomFit.cover,
     this.archiveFit = RoomFit.cover,

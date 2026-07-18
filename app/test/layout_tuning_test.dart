@@ -61,8 +61,8 @@ void main() {
     expect(container.read(layoutTuningProvider).advisorHeight, 288);
   });
 
-  // Task 17d: signage moved to the UI, so all three rooms default to cover again
-  // (the fitHeight excursion is gone; the per-room toggle stays for experiments).
+  // All three rooms default to cover (the fitHeight excursion stays gone; the
+  // per-room toggle remains for debug experiments).
   testWidgets('all rooms render cover by default', (t) async {
     await pumpGoldenApp(t, app: _app());
 
@@ -78,10 +78,11 @@ void main() {
     expect(fitOf('assets/art/archive.png'), BoxFit.cover);
   });
 
-  // Task 17d: a brass nameplate heads every storey (uniform UI signage).
-  testWidgets('a nameplate renders for every storey', (t) async {
+  // Task 17f: signage is the corner floor-name chips (the nameplate slabs are
+  // reverted). One chip per storey, no UI nameplate widgets.
+  testWidgets('corner floor-name chips render for every storey', (t) async {
     await pumpGoldenApp(t, app: _app());
-    expect(find.text("ADVISOR'S OFFICE"), findsOneWidget);
+    expect(find.text('ADVISOR'), findsOneWidget);
     expect(find.text('WORKSHOP FLOOR'), findsOneWidget);
     expect(find.text('ARCHIVE'), findsOneWidget);
   });
