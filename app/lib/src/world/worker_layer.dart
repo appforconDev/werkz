@@ -1,4 +1,3 @@
-import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,6 +51,7 @@ class _WorkerGame extends FlameGame {
   final double renderHeight;
   SkeletalWorker? _worker;
   String? _lastEventId;
+  Vector2 _gameSize = Vector2.zero();
 
   _WorkerGame(this.renderHeight);
 
@@ -69,16 +69,28 @@ class _WorkerGame extends FlameGame {
     );
     _worker = worker;
     await add(worker); // triggers worker.onLoad — throws loudly on a missing part
+    _place(); // onGameResize fires BEFORE onLoad (worker null then) — place now
   }
 
   @override
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
+    _gameSize = gameSize;
+    _place();
+  }
+
+  // Feet on the floor band, x from params.workerX (live). Anchor is bottomCenter,
+  // set by SkeletalWorker.onLoad, so this plants the feet at the band bottom.
+  void _place() {
     final w = _worker;
-    if (w != null) {
-      w.anchor = Anchor.bottomCenter; // feet on the floor band
-      w.position = Vector2(gameSize.x / 2, gameSize.y);
-    }
+    if (w == null || _gameSize.x == 0 || _gameSize.y == 0) return;
+    w.position = Vector2(_gameSize.x * w.params.workerX, _gameSize.y);
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _place(); // keep x live as the workerX slider moves
   }
 
   /// Feed the newest daemon event to the worker (the pure mapping decides state).

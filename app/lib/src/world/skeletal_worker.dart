@@ -19,6 +19,17 @@ typedef SpriteLoader = Future<Sprite?> Function(String assetName);
 /// Which base limbs get a mirrored far-side (built as a parallel chain behind).
 const _farLimbs = ['leg-upper', 'arm-upper', 'leg-lower', 'arm-lower'];
 
+/// Pure scale math (task 19g — unit-tested so device + preview can't diverge).
+/// The root part PNG is exactly its manifest region, so master-pixel size =
+/// rootNativeSize / region-fraction; scale the master to [targetHeight]. Returns
+/// the render size the part tree is built at. Result height == targetHeight.
+({double w, double h}) rigRenderSize(ui.Size rootNative, ui.Rect rootRegion, double targetHeight) {
+  final masterPxH = rootNative.height / rootRegion.height;
+  final masterPxW = rootNative.width / rootRegion.width;
+  final scale = masterPxH == 0 ? 0.0 : targetHeight / masterPxH;
+  return (w: masterPxW * scale, h: targetHeight);
+}
+
 class SkeletalWorker extends PositionComponent {
   final RigManifest manifest;
   final String imageFolder; // Flame images prefix, e.g. 'workers/7a19'
@@ -30,6 +41,7 @@ class SkeletalWorker extends PositionComponent {
 
   double _clock = 0;
   double _rootBaseY = 0;
+  double _buildHeight = 0; // the height the part tree was BUILT at (before params scale)
   final Map<String, SpriteComponent> _joints = {};
 
   SkeletalWorker({
@@ -74,16 +86,17 @@ class SkeletalWorker extends PositionComponent {
       }
     }
 
-    // Master pixel size, inferred from the root part's sprite vs its region — so
-    // parts render at the right aspect without a separate master dimension.
+    // Build the part tree at [renderHeight] (the pure math is unit-tested), then
+    // params.workerHeightPx live-scales the whole worker in update() — so size is
+    // explicit + tunable and the feet stay planted (bottom-center anchor).
     final root = manifest.root;
     final rootSprite = sprites[root.name]!;
-    final masterPxH = rootSprite.srcSize.y / root.masterRegion.height;
-    final masterPxW = rootSprite.srcSize.x / root.masterRegion.width;
-    final scale = renderHeight / masterPxH;
-    final renderW = masterPxW * scale;
-    final renderSize = Vector2(renderW, renderHeight);
-    size = renderSize;
+    final rs = rigRenderSize(
+      ui.Size(rootSprite.srcSize.x, rootSprite.srcSize.y), root.masterRegion, renderHeight);
+    final renderW = rs.w;
+    _buildHeight = rs.h;
+    size = Vector2(renderW, rs.h);
+    anchor = Anchor.bottomCenter; // scale + place from the feet, not the top-left
 
     Vector2 pivotWorld(RigPart p) =>
         Vector2(p.pivotInMaster.dx * renderW, p.pivotInMaster.dy * renderHeight);
@@ -133,6 +146,9 @@ class SkeletalWorker extends PositionComponent {
   void update(double dt) {
     super.update(dt);
     _clock += dt;
+    // Live size: scale the whole worker (from the feet) to params.workerHeightPx,
+    // so the on-screen height is EXACTLY that regardless of the build math.
+    if (_buildHeight > 0) scale = Vector2.all(params.workerHeightPx / _buildHeight);
     final pose = animatePose(animForState(state), _clock, params);
     _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
     final root = _joints[manifest.root.name];

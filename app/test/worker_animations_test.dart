@@ -1,8 +1,10 @@
 // Task 19e: the coded animations are the (ex-Rive) state machine — guard the
 // state→animation mapping, contract-name parity, and that motion actually moves.
+import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:werkz_app/src/world/worker_sprite.dart';
 import 'package:werkz_app/src/world/worker_animations.dart';
+import 'package:werkz_app/src/world/skeletal_worker.dart';
 
 void main() {
   test('every WorkerState maps to a WorkerAnim, names match the contract', () {
@@ -29,6 +31,19 @@ void main() {
     // at the extreme, the far leg swings opposite the near leg
     expect(q.angles['leg-upper']!.sign, isNot(q.angles['leg-upper-far']!.sign),
         reason: 'far leg swings opposite the near leg');
+  });
+
+  test('rigRenderSize lands the worker at the target height (task 19g)', () {
+    // 7A19 torso: bundled 193x248, region height 0.72-0.18=0.54 → master ~459px.
+    const torsoRegion = Rect.fromLTRB(0.05, 0.18, 0.95, 0.72);
+    final rs = rigRenderSize(const Size(193, 248), torsoRegion, 130);
+    expect(rs.h, 130); // height is exactly the target
+    expect(rs.w, closeTo(61, 3)); // aspect-correct width (~61px), not native ~216
+    // the default tuned worker height sits in the 100–140 background target
+    expect(const SkelParams().workerHeightPx, inInclusiveRange(100, 140));
+    // and scaling to workerHeightPx yields exactly that on screen
+    final scaled = rigRenderSize(const Size(193, 248), torsoRegion, const SkelParams().workerHeightPx);
+    expect(scaled.h, const SkelParams().workerHeightPx);
   });
 
   test('idle is calm (small angles), work-typing taps the forearm', () {

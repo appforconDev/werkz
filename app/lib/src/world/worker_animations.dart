@@ -38,6 +38,11 @@ class SkelParams {
   final double headBob; // head nod amplitude (rad)
   final double typeHz; // forearm tap frequency (rad driver)
   final double typeSwing; // forearm tap amplitude (rad)
+  // Mount scale + position (task 19g). workerHeightPx is the total on-screen
+  // worker height in LOGICAL px (~100–140 target; tune up for "big robot"
+  // moments). workerX is the horizontal position on the floor band, 0..1.
+  final double workerHeightPx;
+  final double workerX;
 
   const SkelParams({
     this.walkHz = 1.6,
@@ -47,9 +52,11 @@ class SkelParams {
     this.headBob = 0.06,
     this.typeHz = 3.0,
     this.typeSwing = 0.4,
+    this.workerHeightPx = 110,
+    this.workerX = 0.5,
   });
 
-  SkelParams copyWith({double? walkHz, double? legSwing, double? armSwing, double? bob, double? headBob, double? typeHz, double? typeSwing}) =>
+  SkelParams copyWith({double? walkHz, double? legSwing, double? armSwing, double? bob, double? headBob, double? typeHz, double? typeSwing, double? workerHeightPx, double? workerX}) =>
       SkelParams(
         walkHz: walkHz ?? this.walkHz,
         legSwing: legSwing ?? this.legSwing,
@@ -58,6 +65,8 @@ class SkelParams {
         headBob: headBob ?? this.headBob,
         typeHz: typeHz ?? this.typeHz,
         typeSwing: typeSwing ?? this.typeSwing,
+        workerHeightPx: workerHeightPx ?? this.workerHeightPx,
+        workerX: workerX ?? this.workerX,
       );
 }
 

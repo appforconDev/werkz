@@ -172,6 +172,8 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
         child: Text('— SKELETAL (debug workers) —',
             style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
       ),
+      _slider('worker height', sp.workerHeightPx, 50, 300, (v) => spc.update(sp.copyWith(workerHeightPx: v)), decimals: 0),
+      _slider('worker x', sp.workerX, 0, 1, (v) => spc.update(sp.copyWith(workerX: v)), decimals: 2),
       _slider('walk hz', sp.walkHz, 0.5, 4, (v) => spc.update(sp.copyWith(walkHz: v))),
       _slider('leg swing', sp.legSwing, 0, 1.2, (v) => spc.update(sp.copyWith(legSwing: v)), decimals: 2),
       _slider('arm swing', sp.armSwing, 0, 1.2, (v) => spc.update(sp.copyWith(armSwing: v)), decimals: 2),
