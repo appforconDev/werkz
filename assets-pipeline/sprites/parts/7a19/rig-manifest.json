@@ -120,7 +120,7 @@
   },
   "stateMachineInputs": {
     "speed": "number 0..1 — 0 idle, >0 blends toward the walk cycle (tempo data-driven later)",
-    "mood": "enum routine|busy|maintenance — selects work-typing vs coffee-idle ambient loop",
+    "mood": "number 0/1/2 — 0 routine, 1 busy, 2 maintenance (Rive has NO string/enum input; task 19c)",
     "carrying": "bool — swaps walk for carry-walk"
   }
 }
