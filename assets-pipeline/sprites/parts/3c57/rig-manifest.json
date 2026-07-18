@@ -1,0 +1,126 @@
+{
+  "persona": "WX-3C57",
+  "name": "P. Checkwell",
+  "body": "tall-thin inspector",
+  "master": "master-idle.png",
+  "note": "Regions/pivots are fractions of the master bbox (resolution-independent). Part PNGs are a flat-cut SCAFFOLD — occlusion (torso behind arms/legs) must be inpainted in the editor, and far-side arm/leg are mirror duplicates added there.",
+  "parts": [
+    {
+      "name": "torso",
+      "masterRegion": {
+        "x0": 0.14,
+        "y0": 0.12,
+        "x1": 0.88,
+        "y1": 0.52
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.2
+      },
+      "z": 0,
+      "attachParent": null
+    },
+    {
+      "name": "head",
+      "masterRegion": {
+        "x0": 0.22,
+        "y0": 0,
+        "x1": 0.82,
+        "y1": 0.17
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.9
+      },
+      "z": 5,
+      "attachParent": "torso"
+    },
+    {
+      "name": "arm-upper",
+      "masterRegion": {
+        "x0": 0.44,
+        "y0": 0.22,
+        "x1": 0.76,
+        "y1": 0.44
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.12
+      },
+      "z": 3,
+      "attachParent": "torso"
+    },
+    {
+      "name": "arm-lower",
+      "masterRegion": {
+        "x0": 0.36,
+        "y0": 0.42,
+        "x1": 0.72,
+        "y1": 0.7
+      },
+      "pivot": {
+        "x": 0.58,
+        "y": 0.12
+      },
+      "z": 4,
+      "attachParent": "arm-upper"
+    },
+    {
+      "name": "clipboard",
+      "masterRegion": {
+        "x0": 0.04,
+        "y0": 0.4,
+        "x1": 0.46,
+        "y1": 0.66
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      },
+      "z": 6,
+      "attachParent": "arm-lower"
+    },
+    {
+      "name": "leg-upper",
+      "masterRegion": {
+        "x0": 0.3,
+        "y0": 0.5,
+        "x1": 0.64,
+        "y1": 0.76
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.12
+      },
+      "z": 1,
+      "attachParent": "torso"
+    },
+    {
+      "name": "leg-lower",
+      "masterRegion": {
+        "x0": 0.26,
+        "y0": 0.74,
+        "x1": 0.66,
+        "y1": 1
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.12
+      },
+      "z": 1,
+      "attachParent": "leg-upper"
+    }
+  ],
+  "animationsV1": {
+    "idle": "weight shift + slow head look (reference: idle-stand)",
+    "walk": "contact + passing keys drive the cycle (reference: walk-contact, walk-passing)",
+    "work-typing": "looped forearm tap at desk height (reference: work-typing)",
+    "carry-walk": "walk with both arms forward holding a crate (reference: work-carry)",
+    "coffee-idle": "relaxed idle, one hand holding a mug (reference: maintenance-coffee)"
+  },
+  "stateMachineInputs": {
+    "speed": "number 0..1 — 0 idle, >0 blends toward the walk cycle (tempo data-driven later)",
+    "mood": "enum routine|busy|maintenance — selects work-typing vs coffee-idle ambient loop",
+    "carrying": "bool — swaps walk for carry-walk"
+  }
+}
