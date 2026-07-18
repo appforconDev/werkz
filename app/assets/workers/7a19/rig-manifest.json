@@ -3,7 +3,7 @@
   "name": "Bolt K. Fixit",
   "body": "round generalist",
   "master": "master-idle.png",
-  "note": "Regions/pivots are fractions of the master bbox (resolution-independent). Part PNGs are a flat-cut SCAFFOLD — occlusion (torso behind arms/legs) must be inpainted in the editor, and far-side arm/leg are mirror duplicates added there.",
+  "note": "Regions/pivots are fractions of the master bbox (resolution-independent). Far-side arm/leg are plain DUPLICATES (NOT flipped; task 19k), depth sold at render time by tint + attach offset + z-order behind the torso. The far arm is prop-less (tool pouch masked out).",
   "parts": [
     {
       "name": "torso",

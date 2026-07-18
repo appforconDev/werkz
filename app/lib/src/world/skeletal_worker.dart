@@ -16,8 +16,22 @@ import 'worker_sprite.dart';
 
 typedef SpriteLoader = Future<Sprite?> Function(String assetName);
 
-/// Which base limbs get a mirrored far-side (built as a parallel chain behind).
+/// Which base limbs get a far-side DUPLICATE (a plain copy, NOT flipped —
+/// task 19k; built as a parallel chain painted behind the torso).
 const _farLimbs = ['leg-upper', 'arm-upper', 'leg-lower', 'arm-lower'];
+
+// Far-side depth cues (task 19k, tunable). The duplicate sits slightly BEHIND
+// (+x, away from the left-facing front) and LOWER (+y) than the near limb — a
+// few px, as fractions of the render size so they scale — and is darkened so it
+// reads as behind even when it peeks out during a walk swing.
+const double kFarDepthX = 0.045; // behind, fraction of render width
+const double kFarDepthY = 0.025; // lower, fraction of render height
+const double kFarDepthTint = 0.20; // 20% darker
+
+/// The far-side depth attach offset in render px (task 19k). Pure so the
+/// occlusion check and the build agree.
+ui.Offset farDepthOffset(double renderW, double renderH) =>
+    ui.Offset(renderW * kFarDepthX, renderH * kFarDepthY);
 
 /// Pure scale math (task 19g — unit-tested so device + preview can't diverge).
 /// The root part PNG is exactly its manifest region, so master-pixel size =
@@ -86,7 +100,7 @@ class SkeletalWorker extends PositionComponent {
   double _rootBaseY = 0;
   double _buildHeight = 0; // the height the part tree was BUILT at (before params scale)
   final Map<String, SpriteComponent> _joints = {};
-  PositionComponent? _farGroup; // holds the mirrored far-side limbs BEHIND the torso
+  PositionComponent? _farGroup; // holds the far-side duplicate limbs BEHIND the torso
 
   // Locomotion state (task 19i). The worker owns its own x on the floor band; the
   // mount hands it the viewport. y is the floor line; x walks toward the state's
@@ -204,8 +218,13 @@ class SkeletalWorker extends PositionComponent {
     _farGroup = farGroup;
     add(farGroup);
     // Positions are in render space (root frame); a top far limb parents to the
-    // group (top-left = origin), a lower one to its own upper-far variant.
-    final nudge = ui.Offset(renderW * 0.03, 0); // small depth parallax, kept inside the torso
+    // group (top-left = origin), a lower one to its own upper-far variant. Each
+    // duplicate is DARKENED (depth tint) and the top limb gets the depth attach
+    // offset (behind + lower); children inherit it through the top-left.
+    final depth = farDepthOffset(renderW, renderHeight);
+    final tint = ui.Paint()
+      ..colorFilter = ui.ColorFilter.mode(
+          ui.Color.fromRGBO(0, 0, 0, kFarDepthTint), ui.BlendMode.srcATop);
     for (final base in _farLimbs) {
       final far = sprites['$base-far'];
       final part = manifest.part(base);
@@ -215,18 +234,23 @@ class SkeletalWorker extends PositionComponent {
       final parentComp = upperFar ?? farGroup;
       final parentTopLeft = topLeft['$parentName-far'] ?? ui.Offset.zero;
       final x = bindPoseXform(part, parentTopLeft, renderW, renderHeight);
-      final applyNudge = upperFar == null; // only the top limb offsets; children inherit
+      final applyDepth = upperFar == null; // only the top limb offsets; children inherit
       final comp = SpriteComponent(
         sprite: far,
         size: bboxOf(part),
         anchor: Anchor(part.pivot.dx, part.pivot.dy),
         priority: part.z,
-      )..position = v(applyNudge ? x.localPos + nudge : x.localPos);
+        paint: tint,
+      )..position = v(applyDepth ? x.localPos + depth : x.localPos);
       parentComp.add(comp);
       _joints['$base-far'] = comp;
-      topLeft['$base-far'] = x.worldTopLeft + (applyNudge ? nudge : ui.Offset.zero);
+      topLeft['$base-far'] = x.worldTopLeft + (applyDepth ? depth : ui.Offset.zero);
     }
   }
+
+  /// The absolute (game-space) bounding rect of a joint — for the occlusion
+  /// check (task 19k). Null if the joint isn't built.
+  ui.Rect? debugAbsoluteRectOf(String name) => _joints[name]?.toAbsoluteRect();
 
   @override
   void update(double dt) {

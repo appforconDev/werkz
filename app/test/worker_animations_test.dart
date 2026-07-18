@@ -39,8 +39,8 @@ void main() {
     final rs = rigRenderSize(const Size(193, 248), torsoRegion, 130);
     expect(rs.h, 130); // height is exactly the target
     expect(rs.w, closeTo(61, 3)); // aspect-correct width (~61px), not native ~216
-    // the default tuned worker height sits in the 100–140 background target
-    expect(const SkelParams().workerHeightPx, inInclusiveRange(100, 140));
+    // the default tuned worker height (Rickard's 19k pass) sits at background scale
+    expect(const SkelParams().workerHeightPx, inInclusiveRange(80, 140));
     // and scaling to workerHeightPx yields exactly that on screen
     final scaled = rigRenderSize(const Size(193, 248), torsoRegion, const SkelParams().workerHeightPx);
     expect(scaled.h, const SkelParams().workerHeightPx);

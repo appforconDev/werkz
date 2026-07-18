@@ -76,10 +76,10 @@ void main() {
       expect(typing.angles['arm-upper']!.abs(), greaterThan(0.01));
     });
 
-    test('default frequencies were halved on device feedback', () {
+    test('tuned default frequencies (task 19k device pass)', () {
       expect(p.walkHz, 0.8);
-      expect(p.typeHz, 1.5);
-      // sanity: a full walk cycle is now ~1.25s
+      expect(p.typeHz, 1.7);
+      // sanity: a full walk cycle is ~1.25s
       expect(1 / p.walkHz, closeTo(1.25, 1e-9));
     });
   });

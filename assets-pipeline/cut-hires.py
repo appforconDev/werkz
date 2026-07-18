@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 # Task 19e: cut the APPROVED hi-res masters (attempt1-1) into rig parts per each
-# persona's rig-manifest, generate mirrored far-side limbs, and a debug overlay.
+# persona's rig-manifest, generate far-side limb DUPLICATES, and a debug overlay.
 # Output → sprites/parts-hires/<persona>/. The low-res parts/ stay as reference.
 #
 # HONEST LIMITS (reported, not hidden):
 #  - Occlusion inpaint is MINIMAL: in the idle-stand side profile the near arm
 #    hangs mostly beside the body, so torso-behind-arm bleed is small at render
 #    size. We do a light edge-feather, not content-aware fill (no numpy here).
-#  - Far-side limbs are horizontal mirrors of the near-side, darkened to read as
-#    "behind". A mirror is an approximation of the true opposite-side geometry.
+#  - Far-side limbs are plain DUPLICATES of the near-side (task 19k: NOT flipped —
+#    in profile both feet point the same way). Depth is sold at render time by a
+#    tint + a small attach offset + z-order behind the torso, not baked here.
 #  - The manifest fractions were tuned to the low-res masters; on the hi-res
 #    edit outputs they land APPROXIMATELY (arms differ slightly; 3C57 has no
 #    clipboard in the master). Good enough for the mechanical scaffold; pivots
 #    are the rotation origins and approximate pivots give approximate-but-
 #    readable motion. No manifest edits here — the 19c contract is preserved.
 import json, os
-from PIL import Image, ImageFilter, ImageEnhance, ImageDraw
+from PIL import Image, ImageFilter, ImageDraw
 from collections import deque
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-FAR = {"arm-upper", "arm-lower", "leg-upper", "leg-lower"}  # limbs that get a mirrored far-side
+FAR = {"arm-upper", "arm-lower", "leg-upper", "leg-lower"}  # limbs that get a far-side DUPLICATE
+ARM_FAR = {"arm-upper", "arm-lower"}  # far arm must be prop-less (task 19k)
 COLORS = {"head":(255,80,80),"torso":(80,180,255),"arm-upper":(80,255,120),"arm-lower":(40,200,90),
           "leg-upper":(255,200,60),"leg-lower":(220,160,40),"tool-belt":(200,120,255),
           "clipboard":(200,120,255),"apron":(200,120,255)}
@@ -63,6 +65,25 @@ def isolate(src, thr=175):
     res.putalpha(a); bb=a.getbbox()
     return res.crop(bb) if bb else res
 
+def strip_prop(crop):
+    # Remove the arm-mounted tool/binder prop from the far-arm DUPLICATE (task
+    # 19k): only the near arm carries it. The prop is the warm leather pouch in
+    # the lower-left of the forearm crop; the arm metal is desaturated. So inside
+    # that quadrant we clear saturated warm pixels (spares the grey arm), leaving
+    # the far arm prop-less. Behind the torso this reveals torso, which is fine.
+    im = crop.convert("RGBA"); W, H = im.size; px = im.load()
+    for y in range(H):
+        for x in range(W):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            if x < 0.42 * W and y > 0.24 * H:  # lower-left prop quadrant
+                mx = max(r, g, b); mn = min(r, g, b)
+                s = 0 if mx == 0 else (mx - mn) / mx
+                if s > 0.30 and r > b:  # saturated + warm → the pouch, not the metal
+                    px[x, y] = (0, 0, 0, 0)
+    return im
+
 def load_master(persona):
     # Prefer Rickard's hand-cleaned transparent cutout when it exists (task 19i);
     # only decontaminate its edge. Otherwise threshold-isolate attempt1-1.
@@ -87,8 +108,13 @@ for p in ["7a19","3c57","9b72"]:
         crop = master.crop(box)
         crop.save(f"{outdir}/{part['name']}.png")
         if part["name"] in FAR:
-            far = crop.transpose(Image.FLIP_LEFT_RIGHT)
-            far = ImageEnhance.Brightness(far).enhance(0.72)  # darker → reads as behind
+            # Far side is a plain DUPLICATE — NOT flipped (task 19k): in profile
+            # both feet point the same way. Depth tint is applied at RENDER time
+            # (tunable), so the PNG stays a byte-identical copy (legs) except for
+            # the arm's prop removal.
+            far = crop.copy()
+            if part["name"] in ARM_FAR:
+                far = strip_prop(far)
             far.save(f"{outdir}/{part['name']}-far.png")
     # debug overlay (manifest regions + pivots on the isolated hi-res master)
     ov = master.copy(); d = ImageDraw.Draw(ov)
