@@ -17,7 +17,6 @@ import 'package:werkz_app/src/world/room_registry.dart';
 import 'package:werkz_app/src/world/skeletal_worker.dart';
 import 'package:werkz_app/src/world/wander.dart';
 import 'package:werkz_app/src/world/worker_animations.dart';
-import 'package:werkz_app/src/world/worker_model.dart';
 import 'package:werkz_app/src/world/worker_sprite.dart';
 
 const _personas = ['7a19', '3c57', '9b72'];
@@ -30,15 +29,11 @@ const _anims = [
   ('coffee', ForcedSkelState.coffeeIdle, [0.0, 1.25, 2.5, 3.75]),
 ];
 
-PersonaSpec _specFor(String folder) => kRoster.firstWhere((p) => p.folder == folder);
-
 Future<SkeletalWorker> _worker(RigManifest manifest, String persona) async {
-  final spec = _specFor(persona);
   final w = SkeletalWorker(
     manifest: manifest,
     imageFolder: 'workers/$persona',
     renderHeight: 300,
-    idleArmForward: spec.idleArmForward, // the DEVICE value, not the default
   );
   await w.onLoad();
   w.setViewport(800, 500);
@@ -206,14 +201,16 @@ void main() {
           reason: 'full wander cycle not observed within 300 simulated seconds');
       expect(stripSaved, isTrue);
 
-      // Joint-space lock: both shoulders strictly FORWARD across a full idle
-      // cycle at THIS persona's bias (the forward-of-VERTICAL art check is the
-      // viewed strip + red pivot guide).
-      final spec = _specFor(persona);
-      for (var t = 0.0; t <= 4.0; t += 0.25) {
-        final pose = animatePose(WorkerAnim.idle, t, const SkelParams(), idleArmForward: spec.idleArmForward);
-        expect(pose.angles['arm-upper']!, lessThan(0), reason: '$persona near arm behind at t=$t');
-        expect(pose.angles['arm-upper-far']!, lessThan(0), reason: '$persona far arm behind at t=$t');
+      // Joint-space lock (task 29): stationary shoulders are EXACTLY vertical —
+      // equality to the rest pose, not a directional bias; identical across
+      // personas and constant over the whole cycle. The strips + red pivot
+      // guide document the look in both facings.
+      for (final anim in [WorkerAnim.idle, WorkerAnim.coffeeIdle]) {
+        for (var t = 0.0; t <= 5.0; t += 0.25) {
+          final pose = animatePose(anim, t, const SkelParams());
+          expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: '$persona $anim near arm off vertical at t=$t');
+          expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: '$persona $anim far arm off vertical at t=$t');
+        }
       }
     });
   }

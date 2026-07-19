@@ -29,18 +29,15 @@ class PersonaSpec {
   final String homeRoom; // start + return-to room
   final double heightScale; // 19l per-persona height offset
   final double homeXFrac; // resting slot on the band
-  // Task 25: idle shoulder bias (rad, negative = forward). The authored bind
-  // pose hangs each persona's arm behind vertical by a DIFFERENT amount, so
-  // "arms never behind the back" needs a per-persona value — measured against
-  // the vertical shoulder-pivot guide in the phase strips.
-  final double idleArmForward;
-  const PersonaSpec(this.id, this.folder, this.homeRoom, this.heightScale, this.homeXFrac, this.idleArmForward);
+  // (Task 29 removed the per-persona idle-arm bias: standing arms are a plain
+  // vertical rest for everyone — see worker_animations `_armRest`.)
+  const PersonaSpec(this.id, this.folder, this.homeRoom, this.heightScale, this.homeXFrac);
 }
 
 const kRoster = <PersonaSpec>[
-  PersonaSpec('WX-3C57', '3c57', 'archive', 1.18, 0.30, -0.12), // Checkwell — tall-thin (clipboard arm already forward)
-  PersonaSpec('WX-7A19', '7a19', 'workshop-floor', 1.0, 0.50, -0.30), // Bolt — primary (deep authored hang)
-  PersonaSpec('WX-9B72', '9b72', 'workshop-floor', 0.90, 0.82, -0.35), // Sparkhand — squat (deepest hang)
+  PersonaSpec('WX-3C57', '3c57', 'archive', 1.18, 0.30), // Checkwell — tall-thin inspector
+  PersonaSpec('WX-7A19', '7a19', 'workshop-floor', 1.0, 0.50), // Bolt — primary
+  PersonaSpec('WX-9B72', '9b72', 'workshop-floor', 0.90, 0.82), // Sparkhand — squat
 ];
 
 /// The main interactive session's worker (event-model §1.1: main session → the

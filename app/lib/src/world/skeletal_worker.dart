@@ -150,11 +150,6 @@ class SkeletalWorker extends PositionComponent {
   /// gets it (the wander branch reads the base speed regardless).
   bool onErrand = false;
 
-  /// Per-persona idle shoulder bias (task 25): the authored bind pose hangs each
-  /// persona's arm behind vertical by a different amount, so the "arms never
-  /// behind the back" rule takes a per-persona forward bias (personaSpec).
-  final double idleArmForward;
-
   /// The animation whose pose was applied on the most recent update frame (task
   /// 25 invariant: NO state may leave the skeleton unposed — every placed frame
   /// must come from a named animation; asserted in update, checked by tests).
@@ -177,7 +172,6 @@ class SkeletalWorker extends PositionComponent {
     this.params = const SkelParams(),
     this.heightScale = 1.0,
     this.homeXFrac,
-    this.idleArmForward = kIdleArmForwardDefault,
     SpriteLoader? loadSprite,
   }) : _load = loadSprite ?? _flameLoader;
 
@@ -424,7 +418,7 @@ class SkeletalWorker extends PositionComponent {
       // stride (speed/cadence) is invariant under urgency, so no foot-slide.
       final poseParams =
           urgent ? params.copyWith(walkHz: effectiveWalkHz(params, onErrand: true)) : params;
-      final pose = animatePose(anim, _clock, poseParams, idleArmForward: idleArmForward);
+      final pose = animatePose(anim, _clock, poseParams);
       _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
       final root = _joints[manifest.root.name];
       if (root != null) root.position.y = _rootBaseY + pose.bobY;

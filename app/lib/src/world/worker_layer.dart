@@ -162,8 +162,12 @@ class _WorkerGame extends FlameGame {
       });
       final anim = w.lastAppliedAnim?.name ?? '—';
       final angle = w.nearShoulderAngle;
+      // Task 29 B: errand flag + EFFECTIVE walk speed (base × room × urgency)
+      // so dispatch urgency is measurable on device, not eyeballed.
+      final eff = effectiveWalkSpeed(w.params, w.roomWalkSpeedFactor, onErrand: w.onErrand);
       label.text =
-          '${e.key.substring(3)} $anim ${w.facingRight ? 'R' : 'L'} ${angle == null ? '?' : angle.toStringAsFixed(2)}';
+          '${e.key.substring(3)} $anim ${w.facingRight ? 'R' : 'L'} ${angle == null ? '?' : angle.toStringAsFixed(2)}'
+          ' ${w.onErrand ? 'E' : '·'}${eff.toStringAsFixed(1)}px/s';
       // Float just above the worker's head (position is bottomCenter of the feet).
       label.position = Vector2(w.position.x, w.position.y - w.scale.y.abs() * w.size.y - 4);
     }
@@ -226,7 +230,6 @@ class _WorkerGame extends FlameGame {
           params: _params,
           heightScale: spec.heightScale,
           homeXFrac: spec.homeXFrac,
-          idleArmForward: spec.idleArmForward, // per-persona forward-of-vertical bias (task 25)
         )..forced = _forced;
         _mounted[m.persona] = w;
         add(w);

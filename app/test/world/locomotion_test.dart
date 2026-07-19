@@ -120,15 +120,13 @@ void main() {
           reason: 'errand pace = dispatchSpeedFactor over the same second');
     });
 
-    test('idle arms HOLD the forward bias — no swing (task 28, Rickard)', () {
+    test('idle arms HOLD plain vertical — no swing, no bias (task 28/29)', () {
       const p = SkelParams();
-      final a = animatePose(WorkerAnim.idle, 0.0, p).angles['arm-upper']!;
       for (var t = 0.0; t <= 4.0; t += 0.25) {
         final pose = animatePose(WorkerAnim.idle, t, p);
-        expect(pose.angles['arm-upper']!, a, reason: 'near arm must not oscillate (t=$t)');
-        expect(pose.angles['arm-upper-far']!, a, reason: 'far arm must not oscillate (t=$t)');
+        expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: 'near arm must rest at vertical (t=$t)');
+        expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: 'far arm must rest at vertical (t=$t)');
       }
-      expect(a, lessThan(0), reason: 'held FORWARD of the bind hang');
     });
 
     test('tuned defaults (20b-fix-2 device pass)', () {

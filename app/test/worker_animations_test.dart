@@ -46,17 +46,18 @@ void main() {
     expect(scaled.h, const SkelParams().workerHeightPx);
   });
 
-  test('idle arms hang forward at EVERY phase — never behind the back (23A)', () {
-    // Device bug: idle set no shoulder angle, so arms rested at the authored
-    // bind pose (at/behind vertical on all three personas) and the torso rock
-    // read as "arms rocking behind the back". Locked: across a full idle cycle
-    // both shoulders stay strictly FORWARD (negative in the left-facing frame).
+  test('stationary arms are PLAIN VERTICAL — exactly 0, no bias, no sway (task 29)', () {
+    // Closing the 23→25→26→28 stationary-arm family (Rickard's call): every
+    // standing state poses BOTH shoulders at exactly 0 (the authored rest),
+    // identical across personas, constant across the cycle. Boring is the fix.
     const p = SkelParams();
-    for (var t = 0.0; t <= 4.0; t += 0.1) {
-      final pose = animatePose(WorkerAnim.idle, t, p);
-      expect(pose.angles['arm-upper'], isNotNull);
-      expect(pose.angles['arm-upper']!, lessThan(0), reason: 'near arm behind the back at t=$t');
-      expect(pose.angles['arm-upper-far']!, lessThan(0), reason: 'far arm behind the back at t=$t');
+    for (final anim in [WorkerAnim.idle, WorkerAnim.coffeeIdle]) {
+      for (var t = 0.0; t <= 5.0; t += 0.1) {
+        final pose = animatePose(anim, t, p);
+        expect(pose.angles['arm-upper'], isNotNull);
+        expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: '$anim near arm off vertical at t=$t');
+        expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: '$anim far arm off vertical at t=$t');
+      }
     }
   });
 
@@ -70,7 +71,8 @@ void main() {
         final pose = animatePose(anim, t, p);
         expect(pose.angles.containsKey('arm-upper'), isTrue, reason: '$anim must place the near shoulder');
         expect(pose.angles.containsKey('arm-upper-far'), isTrue, reason: '$anim must place the far shoulder');
-        expect(pose.angles['arm-upper-far']!, lessThan(0), reason: '$anim far arm behind the back at t=$t');
+        // Typing keeps its reach (motion); stationary states rest at vertical.
+        expect(pose.angles['arm-upper-far']!, lessThanOrEqualTo(0), reason: '$anim far arm behind the back at t=$t');
       }
     }
   });

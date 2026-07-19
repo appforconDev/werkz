@@ -154,35 +154,27 @@ double _sin(double x) => math.sin(x);
 const double _kneeLock = 0.0; // leg-lower — straight shin
 const double _elbowLock = 0.0; // arm-lower — straight forearm
 
-// Task 23A/25: at rest the arms must hang neutral-to-slightly-FORWARD OF THE
-// VERTICAL, never behind the back. The authored bind pose hangs the arm behind
-// vertical by a PERSONA-SPECIFIC amount (the 25 regression: 23's single small
-// bias was less than Bolt's/Sparkhand's authored hang, so on device the net arm
-// still sat behind vertical and the breathing read as "rocking behind the
-// back"; the harness had verified "more forward than before", not "forward of
-// vertical"). Negative = forward in the left-facing local frame. Each persona
-// carries its own bias (worker_model.personaSpec, measured against a vertical
-// guide through the shoulder pivot in the phase strips); this is the default
-// for tests/direct construction. The breathing term stays smaller than any
-// bias, so the shoulder angle is negative at every phase (locked by test).
-const double kIdleArmForwardDefault = -0.12;
+// Task 29 (Rickard's call, closing the four-round stationary-arm family
+// 23→25→26→28): standing arms are a PLAIN VERTICAL REST — both shoulders at
+// exactly 0 in every stationary state, no per-persona bias, no sway; identical
+// across personas. Life while standing comes from the head nod, torso rock and
+// body bob ONLY. Deliberately boring — boring is the fix. Walk/type keep their
+// motion; nothing else moves an arm on a planted worker (locked by tests + the
+// equality-to-vertical harness check, both facings).
+const double _armRest = 0.0; // straight down — the authored bind hang, untouched
 
 /// Compute the pose for [anim] at time [t] (seconds) with params [p]. The sprite
 /// is authored LEFT-FACING; facing is handled by a whole-sprite mirror at the
 /// root (see SkeletalWorker), so the angles here are always in the left-facing
 /// local frame and must not encode direction themselves.
-Pose animatePose(WorkerAnim anim, double t, SkelParams p,
-    {double idleArmForward = kIdleArmForwardDefault}) {
+Pose animatePose(WorkerAnim anim, double t, SkelParams p) {
   switch (anim) {
     case WorkerAnim.idle:
       final b = _sin(2 * math.pi * 0.25 * t); // ambient rate halved (19i)
-      // Task 28 (Rickard's call): idle arms do NOT swing — they HOLD the
-      // forward bias; the life comes from the head bob + torso rock + body bob.
-      final idleArm = idleArmForward;
       return Pose({
         'head': p.headBob * b * 0.5,
         'torso': 0.01 * b,
-        'arm-upper': idleArm, 'arm-upper-far': idleArm,
+        'arm-upper': _armRest, 'arm-upper-far': _armRest,
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'leg-lower': _kneeLock, 'leg-lower-far': _kneeLock,
       }, p.bob * 0.25 * b);
@@ -218,12 +210,12 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p,
 
     case WorkerAnim.coffeeIdle:
       final b = _sin(2 * math.pi * 0.2 * t); // ambient rate halved (19i)
+      // Task 29: coffee is a STATIONARY state — both shoulders at plain
+      // vertical rest like every stander (the raised sip arm is retired with
+      // the rest of the standing-arm motion; the head/torso/bob carry the
+      // wind-down read).
       return Pose({
-        'arm-upper': -0.9, // one arm raised to the face (shoulder only, elbow locked)
-        // Task 26: the FAR arm was absent here → reset to 0 = the authored hang,
-        // which sits behind vertical (the 23/25 bug class) — a worker standing
-        // in coffee (every post-job wind-down) showed an arm behind the back.
-        'arm-upper-far': idleArmForward + 0.03 * b,
+        'arm-upper': _armRest, 'arm-upper-far': _armRest,
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'head': p.headBob * b * 0.4 - 0.04,
         'torso': 0.01 * b,
