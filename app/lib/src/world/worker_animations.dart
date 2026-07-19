@@ -66,7 +66,7 @@ class SkelParams {
     this.headBob = 0.06,
     this.typeHz = 1.7,
     this.typeSwing = 0.42,
-    this.workerHeightPx = 50, // wide-shot baseline; Advisor scales up ×~2.4
+    this.workerHeightPx = 80, // Rickard's tuned wide-shot value; Advisor scales up ×2.4 per-room
     this.workerX = 0.5,
     this.walkSpeedPx = 13, // the ONE walk speed — every walking state reads this
   });

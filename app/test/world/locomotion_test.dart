@@ -79,7 +79,7 @@ void main() {
     test('tuned defaults (20b-fix-2 device pass)', () {
       expect(p.walkHz, 0.5);
       expect(p.typeHz, 1.7);
-      expect(p.workerHeightPx, 50); // 20b-fix-2: wide-shot baseline (Advisor scales up per-room)
+      expect(p.workerHeightPx, 80); // Rickard's tuned wide-shot value (Advisor scales up per-room)
       expect(p.walkSpeedPx, 13); // 20b-fix-2: the one unified walk speed
       expect(p.legSwing, 0.36);
       expect(p.armSwing, 0.41);

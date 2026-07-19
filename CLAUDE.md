@@ -11,6 +11,7 @@ You are working in the Werkz monorepo: a mobile game layer for agentic coding. R
 5. **Handoffs:** significant context for the next session goes in `.claude/handoff/` per Winbergh convention.
 6. **Never ask Rickard to paste OTP codes, keys, or passwords into chat.** Sensitive commands (npm publish with 2FA, logins, anything credential-bearing) are run by him directly — hand him the exact command to run instead.
 7. **UI is screenshot-gated (STANDING RULE, task 12).** Every task that touches app UI MUST generate a golden screenshot (`flutter_test` + `matchesGoldenFile`, or integration screenshots) for EVERY screen it changed, rendered at the iPhone-12 logical size **390×844**, and CC MUST VIEW each image before claiming the task done. Goldens live in `app/test/goldens/`. A layout bug that is visible in a screenshot and still reaches Rickard is a process failure — same severity tier as a broken test. Regenerate with `flutter test --update-goldens` and open each PNG.
+8. **Tuned defaults are Rickard's (STANDING RULE, task 20b-fix-3).** A default value Rickard has calibrated on device (worker height, walk speed, layout ratios, timings, …) is HIS. Never change one — not for a rebalance, not "while I'm here," not as a side effect of another change — without calling it out as a deliberate deviation in the report and getting a nod. When a task asks for a NEW knob (e.g. per-room scale), add the knob; do not also re-tune the existing one.
 
 ## Stack rules
 
