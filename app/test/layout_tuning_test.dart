@@ -8,6 +8,7 @@ import 'package:werkz_app/src/state/layout_tuning.dart';
 import 'package:werkz_app/src/state/providers.dart';
 import 'package:werkz_app/src/ui/home_screen.dart';
 import 'package:werkz_app/src/ui/theme.dart';
+import 'package:werkz_app/src/state/skel_tuning.dart';
 import 'golden/harness.dart';
 
 class _SeededWorkshop extends WorkshopController {
@@ -19,6 +20,7 @@ Widget _app() => ProviderScope(
       overrides: [
         secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
         daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+        debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
         workshopProvider.overrideWith(_SeededWorkshop.new),
       ],
       child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const HomeScreen()),

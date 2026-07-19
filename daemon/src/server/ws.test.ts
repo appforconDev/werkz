@@ -151,3 +151,31 @@ test('severity filter suppresses info events', async () => {
   c.ws.close();
   await h.close();
 });
+
+test('logs the close code/reason when a socket ends (task 22 B instrumentation)', async () => {
+  const logs: string[] = [];
+  const bus = new EventBus();
+  const trust = new TrustStore();
+  trust.set('WX-7A19', 100);
+  const service = new DecisionService(defaultConfig, bus, trust);
+  const pairing = new PairingManager('pair-tok');
+  const server = createServer();
+  const wsh = attachWsServer(server, { bus, service, pairing, log: (m) => logs.push(m) });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const port = (server.address() as { port: number }).port;
+  const token = pairing.pair('pair-tok')!;
+
+  const c = await connect(port, token);
+  c.ws.send(JSON.stringify({ type: 'hello', protocolVersion: 1 }));
+  await c.next((m) => m.type === 'welcome');
+  c.ws.close(4001, 'test-drop');
+
+  await new Promise((r) => setTimeout(r, 150)); // let the server observe the close
+  const line = logs.find((l) => l.includes('WS close'));
+  assert.ok(line, `expected a close log, got: ${logs.join(' | ')}`);
+  assert.ok(line.includes('4001'), `close code logged: ${line}`);
+  assert.ok(line.includes('layer=peer'), `layer logged: ${line}`);
+
+  wsh.close();
+  await new Promise<void>((r) => server.close(() => r()));
+});

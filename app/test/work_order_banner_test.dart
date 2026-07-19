@@ -8,6 +8,7 @@ import 'package:werkz_app/src/state/providers.dart';
 import 'package:werkz_app/src/ui/theme.dart';
 import 'package:werkz_app/src/ui/home_screen.dart';
 
+import 'package:werkz_app/src/state/skel_tuning.dart';
 import 'golden/harness.dart';
 
 // A controller we can push work-order phases into to drive real transitions
@@ -22,6 +23,7 @@ Widget _app(_DrivableWorkshop c) => ProviderScope(
       overrides: [
         secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
         daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+        debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
         workshopProvider.overrideWith(() => c),
       ],
       child: MaterialApp(theme: Werkz.theme(), home: const HomeScreen()),

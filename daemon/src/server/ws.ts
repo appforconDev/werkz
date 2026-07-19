@@ -25,13 +25,24 @@ const SEVERITY_RANK: Record<Severity, number> = { info: 0, attention: 1, decisio
 interface ClientState {
   alive: boolean;
   minSeverityRank: number;
+  connectedAt: number; // for uptime in the close log
 }
 
 export function attachWsServer(
   httpServer: Server,
-  deps: { bus: EventBus; service: DecisionService; pairing: PairingManager; getPreflight?: () => Preflight },
+  deps: {
+    bus: EventBus;
+    service: DecisionService;
+    pairing: PairingManager;
+    getPreflight?: () => Preflight;
+    // Connection-drop instrumentation (task 22 B): log WHY a socket ended so the
+    // evening's diagnosis has both ends. Injectable so tests can capture it.
+    log?: (msg: string) => void;
+  },
 ): { close: () => void } {
   const { bus, service, pairing, getPreflight } = deps;
+  const log = deps.log ?? ((m: string) => console.log(m));
+  const upSec = (st?: ClientState) => (st ? Math.round((Date.now() - st.connectedAt) / 1000) : 0);
   const wss = new WebSocketServer({ noServer: true });
   const clients = new Map<WebSocket, ClientState>();
 
@@ -54,7 +65,7 @@ export function attachWsServer(
   }
 
   wss.on('connection', (ws: WebSocket) => {
-    clients.set(ws, { alive: true, minSeverityRank: 0 });
+    clients.set(ws, { alive: true, minSeverityRank: 0, connectedAt: Date.now() });
 
     ws.on('pong', () => {
       const st = clients.get(ws);
@@ -107,8 +118,16 @@ export function attachWsServer(
       }
     });
 
-    ws.on('close', () => clients.delete(ws));
-    ws.on('error', () => clients.delete(ws));
+    ws.on('close', (code: number, reason: Buffer) => {
+      const st = clients.get(ws);
+      const r = reason?.toString() || '';
+      log(`WS close: code=${code}${r ? ` reason="${r}"` : ''} (layer=peer, up=${upSec(st)}s)`);
+      clients.delete(ws);
+    });
+    ws.on('error', (err: Error) => {
+      log(`WS error: ${err?.message ?? err} (layer=error, up=${upSec(clients.get(ws))}s)`);
+      clients.delete(ws);
+    });
   });
 
   // Broadcast every bus event to clients that pass the severity filter.
@@ -118,10 +137,15 @@ export function attachWsServer(
     }
   });
 
-  // Heartbeat: terminate sockets that miss a pong.
+  // Heartbeat: terminate sockets that miss a pong (the daemon-side zombie sweep).
   const heartbeat = setInterval(() => {
     for (const [ws, st] of clients) {
-      if (!st.alive) { ws.terminate(); clients.delete(ws); continue; }
+      if (!st.alive) {
+        log(`WS heartbeat: terminating dead socket — missed pong (layer=heartbeat-sweep, up=${upSec(st)}s)`);
+        ws.terminate();
+        clients.delete(ws);
+        continue;
+      }
       st.alive = false;
       try { ws.ping(); } catch { /* ignore */ }
     }

@@ -14,6 +14,7 @@ import 'package:werkz_app/src/ui/first_run_screen.dart';
 import 'package:werkz_app/src/ui/home_screen.dart';
 import 'package:werkz_app/src/ui/settings_screen.dart';
 import 'package:werkz_app/src/ui/widgets/layout_tuning_panel.dart';
+import 'package:werkz_app/src/state/skel_tuning.dart';
 import 'harness.dart';
 
 const _bashDecision = PendingDecision(
@@ -69,6 +70,7 @@ Widget _screen(
     overrides: [
       secureStorageProvider.overrideWithValue(GoldenStorage(paired ? pairedStore() : {})),
       daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+      debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
       workshopProvider.overrideWith(() => _SeededWorkshop(WorkshopState(
             conn: unreachable ? ConnState.connecting : ConnState.connected,
             pending: pending,
@@ -172,6 +174,7 @@ void main() {
           overrides: [
             secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
             daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+            debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
             workshopProvider.overrideWith(() => _SeededWorkshop(const WorkshopState(conn: ConnState.connected))),
             layoutTuningPanelVisibleProvider.overrideWith(_VisiblePanel.new),
           ],
@@ -188,6 +191,7 @@ void main() {
           overrides: [
             secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
             daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+            debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
             workshopProvider.overrideWith(() => _SeededWorkshop(const WorkshopState(conn: ConnState.connected))),
             layoutTuningPanelVisibleProvider.overrideWith(_VisiblePanel.new),
           ],

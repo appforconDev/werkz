@@ -16,6 +16,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:werkz_app/src/daemon/daemon_client.dart';
 import 'package:werkz_app/src/models/pairing_payload.dart';
+import 'package:werkz_app/src/state/skel_tuning.dart';
 
 const iphone12 = Size(390, 844);
 
@@ -95,6 +96,16 @@ Future<void> pumpGoldenApp(
   // pumpAndSettle alone returns early when nothing is animating.
   await tester.pump(settle);
   await tester.pumpAndSettle(const Duration(milliseconds: 50));
+}
+
+// Workers are ON by default in the shipping app (task 22), but a LIVE Flame
+// GameWidget can't be golden-tested (continuous ticker → pumpAndSettle never
+// returns; async sprite decode won't finish in the captured frame — established
+// task 19f). So every HomeScreen test DISABLES the worker layer via this override
+// to stay deterministic; workers-on is verified on device.
+class WorkersOffController extends WorkersEnabledController {
+  @override
+  bool build() => false;
 }
 
 Future<void> expectGolden(WidgetTester tester, String name) async {

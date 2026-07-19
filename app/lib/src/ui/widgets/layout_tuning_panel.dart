@@ -1,7 +1,9 @@
 import '../../debug_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../daemon/daemon_client.dart' show ConnState, ConnStats;
 import '../../state/layout_tuning.dart';
+import '../../state/providers.dart';
 import '../../state/skel_tuning.dart';
 import '../../state/transit_provider.dart';
 import '../../state/worker_model_provider.dart';
@@ -123,6 +125,7 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
           children: [
+            _connectionReadout(),
             const Padding(
               padding: EdgeInsets.only(bottom: 6),
               child: Text(
@@ -290,6 +293,42 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
           ),
         ),
       ]),
+    );
+  }
+
+  // CONNECTION readout (task 22 B) — the tool Rickard reads to see WHY the socket
+  // dropped: state, uptime, drops this session, last drop reason, last-pong age.
+  Widget _connectionReadout() {
+    final ws = ref.watch(workshopProvider);
+    final ConnStats s = ws.connStats;
+    String dur(Duration? d) => d == null
+        ? '—'
+        : d.inMinutes >= 1
+            ? '${d.inMinutes}m${(d.inSeconds % 60).toString().padLeft(2, '0')}s'
+            : '${d.inSeconds}s';
+    final stateStr = switch (ws.conn) {
+      ConnState.connected => 'CONNECTED',
+      ConnState.connecting => ws.unreachable ? 'UNREACHABLE' : 'CONNECTING…',
+      ConnState.disconnected => 'CLOSED',
+    };
+    final color = ws.conn == ConnState.connected
+        ? Werkz.approvalGreen
+        : ws.unreachable
+            ? Werkz.stampRed
+            : Werkz.steel;
+    TextStyle st(Color c, [double sz = 8]) => TextStyle(fontFamily: Werkz.mono, color: c, fontSize: sz);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('CONNECTION',
+              style: TextStyle(fontFamily: Werkz.mono, color: Werkz.steel, fontSize: 9, letterSpacing: 1)),
+          Text('$stateStr   up:${dur(s.uptime)}   drops:${s.dropCount}   pong:${dur(s.lastPongAge)}   ${s.foreground ? 'fg' : 'bg'}',
+              style: st(color)),
+          if (s.lastDropReason != null) Text('last drop: ${s.lastDropReason}', style: st(Werkz.cream)),
+        ],
+      ),
     );
   }
 

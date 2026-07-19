@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart'; // WidgetsBinding lifecycle observer (task 22 B)
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../daemon/daemon_client.dart';
@@ -93,6 +94,8 @@ class WorkshopState {
   // Daemon unreachable across several reconnect attempts (machine asleep /
   // off-network / daemon stopped). Never a silent dead screen (task 14 B3).
   final bool unreachable;
+  // Connection health for the debug CONNECTION readout (task 22 B).
+  final ConnStats connStats;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -106,6 +109,7 @@ class WorkshopState {
     this.preflight,
     this.workOrder = const WorkOrderStatus(),
     this.unreachable = false,
+    this.connStats = const ConnStats(),
   });
 
   WorkshopState copyWith({
@@ -120,6 +124,7 @@ class WorkshopState {
     Preflight? preflight,
     WorkOrderStatus? workOrder,
     bool? unreachable,
+    ConnStats? connStats,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -133,6 +138,7 @@ class WorkshopState {
         preflight: preflight ?? this.preflight,
         workOrder: workOrder ?? this.workOrder,
         unreachable: unreachable ?? this.unreachable,
+        connStats: connStats ?? this.connStats,
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -153,13 +159,29 @@ final workshopProvider =
 class WorkshopController extends Notifier<WorkshopState> {
   DaemonClient? _client;
   bool _disposed = false;
+  _AppLifecycle? _lifecycle;
   static const _feedCap = 200;
 
   @override
   WorkshopState build() {
     _disposed = false;
+    // Foreground → retry the socket NOW (task 22 B: the biggest recovery path).
+    // Guarded: a pure unit test has no WidgetsBinding to observe.
+    WidgetsBinding? binding;
+    try {
+      binding = WidgetsBinding.instance;
+    } catch (_) {
+      binding = null;
+    }
+    if (binding != null) {
+      _lifecycle = _AppLifecycle((fg) => fg ? _client?.foreground() : _client?.background());
+      binding.addObserver(_lifecycle!);
+    }
+    final b = binding;
     ref.onDispose(() {
       _disposed = true;
+      if (_lifecycle != null && b != null) b.removeObserver(_lifecycle!);
+      _lifecycle = null;
       _client?.dispose();
       _client = null;
     });
@@ -196,6 +218,9 @@ class WorkshopController extends Notifier<WorkshopState> {
     };
     client.onEvent = (e, replay) {
       if (!_disposed) _handleEvent(e, replay);
+    };
+    client.onStats = (s) {
+      if (!_disposed) state = state.copyWith(connStats: s);
     };
     _client = client;
     client.connect();
@@ -366,4 +391,19 @@ class FirstRunController extends AsyncNotifier<bool> {
 
   /// Re-open the tour from settings.
   void reopen() => state = const AsyncData(false);
+}
+
+// App foreground/background bridge (task 22 B) — forwards lifecycle to the client
+// so a resumed app reconnects immediately instead of waiting out the backoff.
+class _AppLifecycle extends WidgetsBindingObserver {
+  final void Function(bool foreground) onChange;
+  _AppLifecycle(this.onChange);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState s) {
+    if (s == AppLifecycleState.resumed) {
+      onChange(true);
+    } else if (s == AppLifecycleState.paused || s == AppLifecycleState.inactive) {
+      onChange(false);
+    }
+  }
 }

@@ -25,7 +25,9 @@ class _WorkersOn extends WorkersEnabledController {
 }
 
 void main() {
-  testWidgets('flag OFF (repo default) → no WorkerLayer mounted, zero footprint', (t) async {
+  testWidgets('WORKERS toggle OFF → no WorkerLayer mounted, zero footprint', (t) async {
+    // Workers are ON by default now (task 22); the toggle still turns them fully
+    // off — assert zero footprint on that path.
     await pumpGoldenApp(
       t,
       app: ProviderScope(
@@ -33,7 +35,7 @@ void main() {
           secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
           daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
           workshopProvider.overrideWith(_Seeded.new),
-          // debugWorkerSpritesProvider left at its default (const debugWorkerSprites = false)
+          debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
         ],
         child: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const HomeScreen()),
       ),

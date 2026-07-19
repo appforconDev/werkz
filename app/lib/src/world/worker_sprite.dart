@@ -12,10 +12,11 @@ import '../models/werkz_event.dart';
 // room's floor band, its state driven by these mappings. Gated by
 // [debugWorkerSprites] — nothing mounts into shipping UI yet.
 
-/// Master gate + default for the WORKERS toggle (task 19h). Stays false in the
-/// repo — Rickard enables workers via the LAYOUT TUNING panel's WORKERS switch,
-/// never by editing this line. The sprite layer is debug-only, not in shipping UI.
-const bool debugWorkerSprites = false;
+/// Default for the WORKERS toggle (task 22): workers are now ON by default — the
+/// sprite layer is part of the SHIPPING experience, not a debug-only preview.
+/// The WORKERS switch in the LAYOUT TUNING panel remains as an OFF-switch for
+/// debugging (flip the provider at runtime; this const is just its initial value).
+const bool debugWorkerSprites = true;
 
 /// THE RIG CONTRACT (task 19c — now the CODE API after 19e dropped Rive). The
 /// animation names are the coded [WorkerAnim] families; the input names/types are

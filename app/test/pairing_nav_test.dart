@@ -1,4 +1,6 @@
 // Reproduces the device hang (task 11.x): after a successful pair, the pushed
+import 'package:werkz_app/src/state/skel_tuning.dart';
+import 'golden/harness.dart';
 // PairingScreen must pop so the workshop (shown by the root underneath) becomes
 // visible — even when the WS connect is slow/never completes. A failed pair must
 // stay put and show the reason.
@@ -56,6 +58,7 @@ Widget _app() => ProviderScope(
         secureStorageProvider.overrideWithValue(const _MemStorage()),
         firstRunSeenProvider.overrideWith(() => _SeenController()),
         daemonClientBuilderProvider.overrideWithValue((p) => _NeverConnectsClient(p.payload, p.sessionToken)),
+        debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
       ],
       child: const MaterialApp(home: _TestRoot()),
     );

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as ws_status;
@@ -9,10 +10,61 @@ import '../models/pending_decision.dart';
 import '../models/preflight.dart';
 
 // Live daemon connection (event-model.md §WS protocol). Handles pairing over
-// HTTP, then the WS channel: hello with replay-from-eventId, heartbeat,
-// reconnect with backoff. Emits high-level callbacks; Riverpod wraps this.
+// HTTP, then the WS channel: hello with replay-from-eventId, heartbeat with
+// silent-drop detection, reconnect with jittered backoff. Emits high-level
+// callbacks; Riverpod wraps this. Reconnect resilience: task 22 B.
 
 enum ConnState { disconnected, connecting, connected }
+
+// ── Reconnect math — pure + unit-tested (task 22) ─────────────────────────────
+
+const int kBackoffBaseMs = 1000; // 1s
+const int kBackoffCapMs = 30000; // 30s
+const int kPingSeconds = 20; // heartbeat interval
+const int kMaxMissedPongs = 2; // 2 missed pongs (≈40s) ⇒ silent-drop, reconnect
+
+/// Next backoff after a failed attempt: double, clamped to [base, cap].
+int nextBackoffMs(int current) => (current * 2).clamp(kBackoffBaseMs, kBackoffCapMs);
+
+/// Apply ±30% jitter so a fleet of phones don't reconnect in lockstep. [rand] is
+/// 0..1 (injected for tests).
+Duration jitteredBackoff(int backoffMs, double rand) =>
+    Duration(milliseconds: (backoffMs * (0.7 + rand * 0.6)).round());
+
+/// A human close reason for the CONNECTION readout, from the WS close code /
+/// error, or the silent-drop path.
+String describeClose(int? code, String? reason, {bool silentDrop = false}) {
+  if (silentDrop) return 'silent drop — no pong in ${kPingSeconds * kMaxMissedPongs}s (NAT/power-save)';
+  if (code == null) return reason == null || reason.isEmpty ? 'socket error / no route' : 'error: $reason';
+  final r = (reason == null || reason.isEmpty) ? '' : ' — $reason';
+  return switch (code) {
+    1000 => 'normal close ($code)$r',
+    1001 => 'going away ($code) — peer backgrounded/shutting down$r',
+    1006 => 'abnormal close ($code) — connection lost, no close frame$r',
+    _ => 'closed ($code)$r',
+  };
+}
+
+/// Snapshot of connection health for the debug CONNECTION readout (task 22 B).
+class ConnStats {
+  final ConnState state;
+  final DateTime? connectedSince; // null while not connected
+  final int dropCount; // drops THIS session
+  final String? lastDropReason;
+  final DateTime? lastPongAt;
+  final bool foreground; // was the app foregrounded at the last transition
+  const ConnStats({
+    this.state = ConnState.disconnected,
+    this.connectedSince,
+    this.dropCount = 0,
+    this.lastDropReason,
+    this.lastPongAt,
+    this.foreground = true,
+  });
+
+  Duration? get uptime => connectedSince == null ? null : DateTime.now().difference(connectedSince!);
+  Duration? get lastPongAge => lastPongAt == null ? null : DateTime.now().difference(lastPongAt!);
+}
 
 class DaemonClient {
   final PairingPayload payload;
@@ -22,12 +74,34 @@ class DaemonClient {
   StreamSubscription? _sub;
   Timer? _heartbeat;
   Timer? _reconnect;
-  int _backoffMs = 500;
+  int _backoffMs = kBackoffBaseMs;
   bool _closed = false;
   String? _lastEventId;
   int _failedAttempts = 0; // consecutive reconnect failures (drives "unreachable")
 
+  // Connection health instrumentation (task 22 B — stop guessing why it drops).
+  int _missedPongs = 0;
+  DateTime? _connectedSince;
+  DateTime? _lastPongAt;
+  int _dropCount = 0;
+  String? _lastDropReason;
+  bool _foreground = true;
+  final math.Random _rng = math.Random();
+
+  /// Test seam: override how the WS channel is built (default: real connect).
+  static WebSocketChannel Function(Uri) channelFactory = WebSocketChannel.connect;
+
   ConnState state = ConnState.disconnected;
+
+  /// A live snapshot for the CONNECTION readout / logging.
+  ConnStats get stats => ConnStats(
+        state: state,
+        connectedSince: _connectedSince,
+        dropCount: _dropCount,
+        lastDropReason: _lastDropReason,
+        lastPongAt: _lastPongAt,
+        foreground: _foreground,
+      );
 
   // replay=true means this event is history from the reconnect snapshot — the
   // app must log it but NEVER treat it as a live prompt/banner (task 16 B).
@@ -37,8 +111,32 @@ class DaemonClient {
   // True once the daemon has been unreachable across several reconnect attempts
   // (machine asleep / off-network / daemon stopped). Cleared on a live message.
   void Function(bool unreachable)? onReachability;
+  // Connection health changed (connect / drop / pong) — drives the debug readout.
+  void Function(ConnStats stats)? onStats;
 
   DaemonClient({required this.payload, required this.sessionToken});
+
+  void _emitStats() => onStats?.call(stats);
+
+  /// The app moved to the foreground (task 22 B): retry NOW rather than waiting
+  /// out the backoff — the most common recovery path. Also used on a network
+  /// change. No-op while connected.
+  void foreground() {
+    _foreground = true;
+    _emitStats();
+    if (_closed || state == ConnState.connected) return;
+    _backoffMs = kBackoffBaseMs;
+    _reconnect?.cancel();
+    _open();
+  }
+
+  void background() {
+    _foreground = false;
+    _emitStats();
+  }
+
+  /// A network interface changed — kick an immediate retry (same as foreground).
+  void networkChanged() => foreground();
 
   // Test seam: override the pairing network call in widget tests.
   static Future<(String?, String?)> Function(PairingPayload)? pairOverride;
@@ -152,24 +250,41 @@ class DaemonClient {
   void _open() {
     _setStateAsync(ConnState.connecting); // never synchronous within connect()
     try {
-      final ch = WebSocketChannel.connect(Uri.parse(payload.wsUrl(sessionToken)));
+      final ch = channelFactory(Uri.parse(payload.wsUrl(sessionToken)));
       _ch = ch;
       _sub = ch.stream.listen(_onMessage, onDone: _onDone, onError: (_) => _onDone(), cancelOnError: true);
       _send({'type': 'hello', 'protocolVersion': 1, if (_lastEventId != null) 'lastEventId': _lastEventId});
+      _missedPongs = 0;
       _heartbeat?.cancel();
-      _heartbeat = Timer.periodic(const Duration(seconds: 20), (_) => _send({'type': 'ping'}));
+      _heartbeat = Timer.periodic(const Duration(seconds: kPingSeconds), (_) => _tick());
     } catch (_) {
       _onDone();
     }
   }
 
+  // Heartbeat tick: if the daemon has missed too many pongs, the socket is
+  // silently dead (NAT/power-save eats it with no close frame) — force a
+  // reconnect in seconds instead of waiting on TCP. Otherwise send a fresh ping.
+  void _tick() {
+    if (_missedPongs >= kMaxMissedPongs) {
+      _dropAndReconnect(describeClose(null, null, silentDrop: true));
+      return;
+    }
+    _missedPongs++;
+    _send({'type': 'ping'});
+  }
+
   void _onMessage(dynamic data) {
-    _backoffMs = 500; // healthy connection resets backoff
+    _backoffMs = kBackoffBaseMs; // healthy connection resets backoff
     if (_failedAttempts != 0) {
       _failedAttempts = 0;
       onReachability?.call(false); // a live frame means we're reachable again
     }
-    if (state != ConnState.connected) _setState(ConnState.connected);
+    if (state != ConnState.connected) {
+      _connectedSince = DateTime.now();
+      _setState(ConnState.connected);
+      _emitStats();
+    }
     final msg = jsonDecode(data as String) as Map<String, dynamic>;
     switch (msg['type']) {
       case 'welcome':
@@ -187,6 +302,10 @@ class DaemonClient {
         onEvent?.call(ev, msg['replay'] == true);
         break;
       case 'pong':
+        _missedPongs = 0;
+        _lastPongAt = DateTime.now();
+        _emitStats();
+        break;
       case 'released':
       case 'subscribed':
       case 'error':
@@ -194,10 +313,25 @@ class DaemonClient {
     }
   }
 
+  // The socket closed (or errored). Capture WHY from the WS close code/reason for
+  // the CONNECTION readout, then reconnect.
   void _onDone() {
+    final reason = describeClose(_ch?.closeCode, _ch?.closeReason);
+    _dropAndReconnect(reason);
+  }
+
+  void _dropAndReconnect(String reason) {
     _heartbeat?.cancel();
     _sub?.cancel();
+    _sub = null;
+    try {
+      _ch?.sink.close();
+    } catch (_) {/* already dead */}
     _ch = null;
+    _lastDropReason = reason;
+    if (state == ConnState.connected) _dropCount++; // a lost ESTABLISHED connection
+    _connectedSince = null;
+    _emitStats();
     if (_closed) {
       _setState(ConnState.disconnected);
       return;
@@ -208,8 +342,8 @@ class DaemonClient {
     _failedAttempts++;
     if (_failedAttempts >= 2) onReachability?.call(true);
     _reconnect?.cancel();
-    _reconnect = Timer(Duration(milliseconds: _backoffMs), _open);
-    _backoffMs = (_backoffMs * 2).clamp(500, 15000);
+    _reconnect = Timer(jitteredBackoff(_backoffMs, _rng.nextDouble()), _open);
+    _backoffMs = nextBackoffMs(_backoffMs);
   }
 
   void release(String decisionId, String decision) {
