@@ -46,18 +46,39 @@ test('route: destructive always holds regardless of trust', () => {
   assert.equal(route(cls, 100, cfg).action, 'hold');
 });
 
-test('route: trust thresholds gate auto-allow', () => {
+test('route: trust thresholds gate auto-allow; below-threshold HOLDS, never ask/deny (task 27)', () => {
+  // Fresh-workshop policy: reads are side-effect-free → auto-allow from trust 0.
   const readCls = classify({ toolName: 'Read', toolInput: {} }, cfg);
-  assert.equal(route(readCls, 24, cfg).action, 'ask');
-  assert.equal(route(readCls, 25, cfg).action, 'allow');
+  assert.equal(route(readCls, 0, cfg).action, 'allow');
+  assert.equal(route(readCls, 100, cfg).action, 'allow');
 
+  // Below threshold = a HUMAN question on the phone (hold) — 'ask' passed to a
+  // headless CC was an instant silent deny (the task-27 bug).
   const routineCls = classify({ toolName: 'Bash', toolInput: { command: 'npm test' } }, cfg);
-  assert.equal(route(routineCls, 49, cfg).action, 'ask');
+  assert.equal(route(routineCls, 49, cfg).action, 'hold');
   assert.equal(route(routineCls, 50, cfg).action, 'allow');
 
   const smallCls = classify({ toolName: 'Write', toolInput: { file_path: 'a.ts', content: 'x' } }, cfg);
-  assert.equal(route(smallCls, 74, cfg).action, 'ask');
+  assert.equal(route(smallCls, 74, cfg).action, 'hold');
   assert.equal(route(smallCls, 75, cfg).action, 'allow');
+});
+
+test('route: no class at any trust ever yields a non-hold non-allow outcome (task 27)', () => {
+  const calls = [
+    { toolName: 'Read', toolInput: {} },
+    { toolName: 'Bash', toolInput: { command: 'pwd' } },
+    { toolName: 'Bash', toolInput: { command: 'npm test' } },
+    { toolName: 'Write', toolInput: { file_path: 'a.ts', content: 'x' } },
+    { toolName: 'Write', toolInput: { file_path: 'a.ts', content: 'x\n'.repeat(50) } },
+    { toolName: 'Bash', toolInput: { command: 'git push --force' } },
+  ];
+  for (const call of calls) {
+    for (const trust of [0, 24, 25, 49, 50, 74, 75, 100]) {
+      const r = route(classify(call, cfg), trust, cfg);
+      assert.ok(r.action === 'allow' || r.action === 'hold',
+        `${call.toolName}@trust${trust} routed ${r.action} — silent outcomes are forbidden`);
+    }
+  }
 });
 
 test('route: large-diff always holds', () => {

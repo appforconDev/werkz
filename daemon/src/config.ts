@@ -16,7 +16,12 @@ export interface DaemonConfig {
 }
 
 export const defaultConfig: DaemonConfig = {
-  trustThresholds: { read: 25, routine: 50, smallDiff: 75 },
+  // read: 0 (task 27 calibration, sanctioned by GDD §4.1 "starting values;
+  // calibrate"): reads are side-effect-free, and gating them at 25 made a
+  // fresh workshop (trust 0) hold/deny EVERY pwd/ls/Read — a read-only audit
+  // produced nothing but rejections. Reads auto-allow from trust 0; the trust
+  // ladder governs writes (routine 50, small-diff 75; destructive NEVER auto).
+  trustThresholds: { read: 0, routine: 50, smallDiff: 75 },
   smallDiffMaxLines: 20,
   keyboardHoldSeconds: 300,
   awayHoldSeconds: 7200,

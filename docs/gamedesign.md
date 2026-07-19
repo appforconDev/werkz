@@ -202,7 +202,7 @@ BYOK end-to-end (narration runs on the user's key; Haiku-class suffices). Margin
 ## 9. Open Questions
 
 1. **Name.** "Verk" is a placeholder; Agentz/Botby/Skift parked. Decide at brand step (brand-builder skill).
-2. **Trust threshold calibration** — starting values in §4.1 must be validated against real revert data in closed beta.
+2. **Trust threshold calibration** — starting values in §4.1 must be validated against real revert data in closed beta. **Calibrated 2026-07-19 (task 27, approved):** read threshold 25 → 0 — reads are side-effect-free, and gating them made a fresh workshop (trust 0) reject every look-around a headless job attempted. The trust ladder now starts at routine (50). Below-threshold routes HOLD as phone requisitions (never CC's terminal "ask" passthrough — headless jobs have no terminal; see event-model §3.1 revision). The immediate +1 per phone-approved decision is live; revert/expiry deductions still pending revert detection.
 3. **Octagon LLM-judge criteria** — rubric for routine-case auto-judging needs definition during event-model design.
 4. **Event model** — the concrete mapping CC hooks (PreToolUse/PostToolUse/Notification/Stop, Agent SDK events) → game objects is the next design artifact, not covered here.
 5. **Android/iOS launch order** — Flutter gives both; decide beta platform (TestFlight friction vs. Play policy).

@@ -15,6 +15,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { defaultConfig } from './config.ts';
 import { EventBus } from './events/bus.ts';
 import { DecisionService } from './decisions/service.ts';
+import { TrustStore } from './decisions/trust.ts';
 import { createDaemonServer } from './server/http.ts';
 import { attachWsServer } from './server/ws.ts';
 import { PairingManager } from './pairing/auth.ts';
@@ -118,7 +119,10 @@ let pinnedToken: string | undefined;
 try { pinnedToken = readFileSync(pairingTokenPath, 'utf8').trim() || undefined; } catch { /* fresh */ }
 
 const bus = new EventBus(eventsPath);
-const trust = undefined;
+// Task 27: trust is per-WORKSHOP state (this project's .werkz dir), persisted
+// across daemon restarts and untouched by phone re-pairs. Memory-only before —
+// every start silently reset every worker to 0.
+const trust = new TrustStore(0, join(stateDir, 'trust.json'));
 const service = new DecisionService(defaultConfig, bus, trust, pendingPath);
 const pairing = new PairingManager(pinnedToken, sessionsPath);
 const narrationKeys = new NarrationKeyStore(join(stateDir, 'narration-key'));

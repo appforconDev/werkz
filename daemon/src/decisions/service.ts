@@ -275,7 +275,9 @@ export class DecisionService {
     const prior = this.#dedup.lookup(key, now);
     if (prior) {
       return {
-        response: reply(prior, `deduped: prior ${prior} within window`),
+        response: reply(prior, prior === 'allow'
+            ? `werkz: APPROVED (operator's recent identical approval reused)`
+            : `werkz: DENIED (the operator recently denied this exact action — do not retry; note it in your report)`),
         routingLatencyMs,
         route: r,
         deduped: true,
@@ -328,10 +330,25 @@ export class DecisionService {
           payload: { decisionId, decisionClass: cls.decisionClass, reason: outcome.superseded, ceilingSeconds: ceiling },
         }),
       );
-      return { response: reply('ask', `superseded: ${outcome.superseded}`), routingLatencyMs, route: r, decisionId };
+      // Loud-failure applies to the AGENT too (task 27): the reason must tell
+      // it the operator simply hasn't answered — so its report says "awaiting
+      // operator approval", never "I'm blocked". (In an interactive session
+      // this 'ask' surfaces CC's own dialog — the §3.4 fallback.)
+      return {
+        response: reply('ask',
+          `werkz: requisition ${outcome.superseded} — no operator decision arrived within the hold window. ` +
+          `This is NOT a refusal: the operator has not seen or has not answered it yet. ` +
+          `You may retry this step once later, or continue other work and state "awaiting operator approval" for it in your report.`),
+        routingLatencyMs, route: r, decisionId,
+      };
     }
 
     this.#dedup.record(key, outcome, Date.now());
+    // GDD §4.1: +1 trust per phone-APPROVED decision (immediate; the no-revert
+    // qualifier and the −5 revert / −1 expiry deductions are P2 — they need
+    // revert detection). Before task 27 NOTHING ever raised trust, so every
+    // workshop sat at 0 forever and the ladder was decorative.
+    const trustAfter = outcome === 'allow' ? this.#trust.increment(ctx.workerId) : this.#trust.get(ctx.workerId);
     this.#bus.emit(
       buildEvent({
         sessionId: ctx.sessionId,
@@ -339,10 +356,15 @@ export class DecisionService {
         workerId: ctx.workerId,
         eventType: outcome === 'allow' ? 'decision.approved' : 'decision.denied',
         severity: 'info',
-        payload: { decisionId, decisionClass: cls.decisionClass },
+        payload: { decisionId, decisionClass: cls.decisionClass, trust: trustAfter },
       }),
     );
-    return { response: reply(outcome, `phone released: ${outcome}`), routingLatencyMs, route: r, decisionId };
+    return {
+      response: reply(outcome, outcome === 'allow'
+          ? `werkz: APPROVED by the operator from the phone`
+          : `werkz: DENIED by the operator from the phone — do not retry this action; note the denial in your report and continue with what remains.`),
+      routingLatencyMs, route: r, decisionId,
+    };
   }
 
   /** Record an interactive signal (UserPromptSubmit etc.) for §3.4 timing. */

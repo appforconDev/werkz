@@ -12,7 +12,14 @@ export type DecisionClass =
   | 'large-diff'
   | 'destructive';
 
-export type RouteAction = 'allow' | 'ask' | 'hold';
+// Task 27: 'ask' is GONE from routing. It meant "reply permissionDecision:'ask'
+// and let CC's terminal dialog handle it" — but a HEADLESS job (claude -p, the
+// work-order path) has no dialog, so 'ask' became an instant silent DENY and no
+// requisition ever reached the phone: the worst failure mode the daemon can
+// have. Below-threshold now HOLDS (raises a phone requisition under the §3.4
+// adaptive ceiling); CC's own dialog remains the SUPERSEDE fallback when the
+// ceiling elapses in an interactive session.
+export type RouteAction = 'allow' | 'hold';
 
 export interface ToolCall {
   toolName: string;
@@ -103,8 +110,10 @@ export function classify(call: ToolCall, config: DaemonConfig): Classification {
 
 /**
  * Decide the response for a classified call given current trust.
- * Returns 'allow' (auto-approve), 'ask' (let CC's dialog handle it), or
- * 'hold' (raise a requisition and block until the phone answers).
+ * Returns 'allow' (auto-approve) or 'hold' (raise a phone requisition and
+ * block until the phone answers / the adaptive ceiling supersedes). A decision
+ * the trust ladder doesn't clear is ALWAYS a human question, never a silent
+ * outcome (task 27).
  */
 export function route(
   cls: Classification,
@@ -123,14 +132,14 @@ export function route(
     case 'small-diff':
       return trust >= t.smallDiff
         ? { ...base, action: 'allow', reason: `trust ${trust} ≥ ${t.smallDiff}` }
-        : { ...base, action: 'ask', reason: `trust ${trust} < ${t.smallDiff}` };
+        : { ...base, action: 'hold', reason: `trust ${trust} < ${t.smallDiff}` };
     case 'routine':
       return trust >= t.routine
         ? { ...base, action: 'allow', reason: `trust ${trust} ≥ ${t.routine}` }
-        : { ...base, action: 'ask', reason: `trust ${trust} < ${t.routine}` };
+        : { ...base, action: 'hold', reason: `trust ${trust} < ${t.routine}` };
     case 'read':
       return trust >= t.read
         ? { ...base, action: 'allow', reason: `trust ${trust} ≥ ${t.read}` }
-        : { ...base, action: 'ask', reason: `trust ${trust} < ${t.read}` };
+        : { ...base, action: 'hold', reason: `trust ${trust} < ${t.read}` };
   }
 }

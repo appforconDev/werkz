@@ -142,18 +142,19 @@ The classifier is data (JSON in daemon config), not code — extending it must n
 
 Every `PreToolUse` call is classified. The daemon then routes:
 
-| Class | Definition | Trust ≥ threshold ⇒ auto-approve? | Hook path |
+| Class | Definition | Trust ≥ threshold ⇒ auto-approve? | Hook path below threshold |
 |---|---|---|---|
-| read | Read-only tools & read-only Bash (classifier) | 25 | non-decision |
-| routine | Test/install/build commands, non-destructive Bash | 50 | non-decision |
-| small-diff | Edit/Write, diff < 20 lines, file not matching critical globs (`**/.env*`, `**/secrets*`, CI configs, lockfiles opt-in) | 75 | non-decision |
+| read | Read-only tools & read-only Bash (classifier) | **0** — auto from fresh (task 27 calibration) | non-decision (always allow) |
+| routine | Test/install/build commands, non-destructive Bash | 50 | **decision (hold)** |
+| small-diff | Edit/Write, diff < 20 lines, file not matching critical globs (`**/.env*`, `**/secrets*`, CI configs, lockfiles opt-in) | 75 | **decision (hold)** |
 | large-diff | Any edit ≥ 20 lines or critical file | never — always user | **decision (hold)** |
 | **destructive** | See 3.2 | **NEVER — hard line, enforced in daemon routing, unbypassable by config** | **decision (hold)** |
 
-- **Non-decision path:** if trust clears the threshold, daemon replies `permissionDecision: "allow"` instantly; otherwise `permissionDecision: "ask"` (CC's own dialog handles it — we do not hold). Either way the reply is immediate and must meet the §3.5 latency budget.
-- **Decision path:** daemon holds the hook (§3.4) and emits `decision.requested`; the phone's answer becomes `allow`/`deny`.
+- **Non-decision path:** trust clears the threshold ⇒ daemon replies `permissionDecision: "allow"` instantly, within the §3.5 latency budget.
+- **Decision path:** everything else. The daemon holds the hook (§3.4) and emits `decision.requested`; the phone's answer becomes `allow`/`deny`.
+- **REVISED 2026-07-19 (task 27, approved deviation):** the original design replied `permissionDecision: "ask"` below threshold ("CC's own dialog handles it — we do not hold"). That assumed an interactive terminal; a HEADLESS job (`claude -p`, the work-order path) has no dialog, so "ask" became an instant silent deny and no requisition ever reached the phone. Below-threshold now **holds**; when the ceiling elapses unanswered the daemon replies `ask` — in an interactive session that surfaces CC's dialog (the original fallback), in a headless one the reason explicitly says "awaiting operator approval — not a refusal" so the agent reports the wait honestly. Reads auto-allow from trust 0 (side-effect-free; "starting values; calibrate" per GDD §4.1). The immediate **+1 trust per phone-approved decision** is live (revert −5 / expiry −1 remain P2); trust persists per workshop in `.werkz/trust.json`.
 
-Threshold numbers 25/50/75 are GDD §4.1 starting values — daemon reads them from config for beta calibration.
+Threshold numbers 50/75 are GDD §4.1 starting values — daemon reads them from config for beta calibration (read recalibrated to 0, task 27).
 
 ### 3.2 Destructive classification (proposal — approve/amend this list)
 
