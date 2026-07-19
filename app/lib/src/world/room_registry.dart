@@ -14,6 +14,10 @@ class RoomDef {
   final double bandHeight; // px height of the worker band
   final double leftEdgeX; // exit/entry x, fraction of room width
   final double rightEdgeX;
+  // Per-room camera-distance scale (task 20b-fix-2): rooms are drawn at different
+  // distances, so a worker's rendered height = the global default × this factor.
+  // Wide shots (Workshop/Archive) = 1.0; the Advisor close-up is much larger.
+  final double workerScaleFactor;
   const RoomDef({
     required this.id,
     required this.buildOrder,
@@ -21,6 +25,7 @@ class RoomDef {
     this.bandHeight = 160,
     this.leftEdgeX = 0.0,
     this.rightEdgeX = 1.0,
+    this.workerScaleFactor = 1.0,
   });
 }
 
@@ -30,9 +35,10 @@ class RoomDef {
 /// defaults, so verify it can host a worker): feet a touch above the seam, a band
 /// tall enough for the biggest persona at the tuned height.
 const kRooms = <String, RoomDef>{
-  'advisors-office': RoomDef(id: 'advisors-office', buildOrder: 0, bandBottom: 4, bandHeight: 160),
-  'workshop-floor': RoomDef(id: 'workshop-floor', buildOrder: 1, bandBottom: 4, bandHeight: 160),
-  'archive': RoomDef(id: 'archive', buildOrder: 2, bandBottom: 4, bandHeight: 160),
+  // Advisor is a close-up (penthouse), so workers read ~2.4× the wide-shot height.
+  'advisors-office': RoomDef(id: 'advisors-office', buildOrder: 0, bandBottom: 4, bandHeight: 160, workerScaleFactor: 2.4),
+  'workshop-floor': RoomDef(id: 'workshop-floor', buildOrder: 1, bandBottom: 4, bandHeight: 160, workerScaleFactor: 1.0),
+  'archive': RoomDef(id: 'archive', buildOrder: 2, bandBottom: 4, bandHeight: 160, workerScaleFactor: 1.0),
 };
 
 RoomDef? roomDef(String id) => kRooms[id];

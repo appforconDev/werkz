@@ -10,17 +10,28 @@ import 'package:werkz_app/src/state/transit_provider.dart';
 import 'package:werkz_app/src/state/worker_model_provider.dart';
 import 'package:werkz_app/src/world/room_registry.dart';
 import 'package:werkz_app/src/world/transit.dart';
+import 'package:werkz_app/src/world/worker_animations.dart';
 import 'package:werkz_app/src/world/worker_model.dart';
 
 // Mirror of WorkerLayer's render decision: the set of MOUNTED rooms that draw a
 // worker right now. Must always be 0 (only during a beat) or 1 — never 2, never a
 // resting worker in an unrendered room.
-Set<String> roomsRendering(WorkerTransit wt, TransitParams p) {
+// A brisk walk speed so transits complete in a couple of test seconds (the real
+// default 13 px/s is intentionally slow → ~30 s transits). roomsRendering + the
+// provider both read this, so the visual + logical timing stay in lockstep.
+const double _kTestSpeed = 200;
+
+Set<String> roomsRendering(WorkerTransit wt, TransitParams p, {double walkSpeedPx = _kTestSpeed}) {
   if (wt.active != null) {
-    final f = transitFrame(wt.active!, p);
+    final f = transitFrame(wt.active!, p, walkSpeedPx);
     return f.room == null ? <String>{} : {f.room!};
   }
   return {wt.visualRoom};
+}
+
+class _FastSkel extends SkelParamsController {
+  @override
+  SkelParams build() => const SkelParams(walkSpeedPx: _kTestSpeed);
 }
 
 class _FakeModel extends WorkerModelController {
@@ -50,6 +61,7 @@ void main() {
   ProviderContainer make({bool patrol = false}) {
     final c = ProviderContainer(overrides: [
       workerModelProvider.overrideWith(_FakeModel.new),
+      skelParamsProvider.overrideWith(_FastSkel.new),
       if (patrol) forcedSkelStateProvider.overrideWith(_Patrol.new),
     ]);
     addTearDown(c.dispose);

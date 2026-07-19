@@ -122,6 +122,10 @@ class SkeletalWorker extends PositionComponent {
   final double heightScale;
   final double? homeXFrac;
 
+  /// Per-room camera-distance scale (task 20b-fix-2), set live by the mount from
+  /// the room registry (blended during a cross-room transit). Multiplies the height.
+  double roomScale = 1.0;
+
   SkeletalWorker({
     required this.manifest,
     required this.imageFolder,
@@ -281,7 +285,7 @@ class SkeletalWorker extends PositionComponent {
     // (task 20b). AUTO walks toward the event-driven state's target x; a forced
     // state overrides it; a transit override overrides everything (the transit
     // layer positions the worker as it crosses rooms).
-    final s = _buildHeight > 0 ? params.workerHeightPx * heightScale / _buildHeight : 1.0;
+    final s = _buildHeight > 0 ? params.workerHeightPx * heightScale * roomScale / _buildHeight : 1.0;
     if (_placed) {
       final home = _gameWidth * (homeXFrac ?? params.workerX);
       final deskX = targetXFor(WorkerState.working, _gameWidth, home);

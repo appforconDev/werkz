@@ -28,8 +28,11 @@ class _Mount {
   final WorkerStatus status;
   final double? overrideXFrac;
   final bool facingRight;
-  const _Mount(this.persona, this.status, this.overrideXFrac, this.facingRight);
+  final double roomScale; // per-room camera scale (blended mid-transit)
+  const _Mount(this.persona, this.status, this.overrideXFrac, this.facingRight, this.roomScale);
 }
+
+double _lerp(double a, double b, double t) => a + (b - a) * t;
 
 class WorkerLayer extends ConsumerStatefulWidget {
   final String room; // which storey this layer renders
@@ -47,28 +50,33 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     final model = ref.watch(workerModelProvider);
     final transit = ref.watch(transitProvider);
     final params = ref.watch(transitParamsProvider);
+    final skel = ref.watch(skelParamsProvider);
+    final roomScale = ref.watch(roomScaleProvider);
+    double scaleOf(String room) => roomScale[room] ?? 1.0;
 
-    // Resolve which workers are visible in THIS room this frame.
+    // Resolve which workers are visible in THIS room this frame, at this room's
+    // camera scale (blended across a cross-room transit so there is no pop).
     final mounts = <_Mount>[];
     for (final w in model.workers) {
       final wt = transit[w.personaId];
       final active = wt?.active;
       if (active != null) {
-        final f = transitFrame(active, params);
+        final f = transitFrame(active, params, skel.walkSpeedPx);
         if (f.room == widget.room) {
+          final blend = _lerp(scaleOf(active.fromRoom), scaleOf(active.toRoom), f.progress);
           mounts.add(f.done
-              ? _Mount(w.personaId, w.status, null, false) // arrived — hand back to locomotion
-              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight));
+              ? _Mount(w.personaId, w.status, null, false, blend) // arrived — hand back to locomotion
+              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend));
         }
         // f.room == null → off-view beat → not in any room
       } else {
         final visualRoom = wt?.visualRoom ?? w.currentRoom;
-        if (visualRoom == widget.room) mounts.add(_Mount(w.personaId, w.status, null, false));
+        if (visualRoom == widget.room) mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room)));
       }
     }
 
     _game.setMounts(mounts);
-    _game.applyParams(ref.watch(skelParamsProvider));
+    _game.applyParams(skel);
     _game.applyForced(ref.watch(forcedSkelStateProvider));
     return GameWidget(
       game: _game,
@@ -160,6 +168,7 @@ class _WorkerGame extends FlameGame {
       } else {
         w.state = workerStateForStatus(m.status);
       }
+      w.roomScale = m.roomScale; // per-room camera scale (blended mid-transit)
       w.setTransitOverride(m.overrideXFrac, facingRight: m.facingRight);
     }
     _pushViewport();

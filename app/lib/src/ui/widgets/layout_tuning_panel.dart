@@ -204,17 +204,33 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('type hz', sp.typeHz, 1, 6, (v) => spc.update(sp.copyWith(typeHz: v))),
       _slider('type swing', sp.typeSwing, 0, 1, (v) => spc.update(sp.copyWith(typeSwing: v)), decimals: 2),
       ..._transitSliders(),
+      ..._roomScaleSliders(),
     ];
   }
 
   // Inter-room transit tuning (task 20b): beat = off-view pause (scales with room
-  // distance); edge margin = how far past the edge the worker steps before the beat.
+  // distance); edge margin = how far past the edge the worker steps. The edge-walk
+  // SPEED is the unified walkSpeedPx (task 20b-fix-2) — no separate transit speed.
   List<Widget> _transitSliders() {
     final tp = ref.watch(transitParamsProvider);
     final tpc = ref.read(transitParamsProvider.notifier);
     return [
       _slider('transit beat', tp.beatSec, 0, 2, (v) => tpc.update(tp.copyWith(beatSec: v)), decimals: 2),
       _slider('edge margin', tp.edgeMargin, 0, 0.5, (v) => tpc.update(tp.copyWith(edgeMargin: v)), decimals: 2),
+    ];
+  }
+
+  // Per-room worker scale (task 20b-fix-2): calibrate each floor's camera distance
+  // live. Rendered height = global worker height × this factor.
+  List<Widget> _roomScaleSliders() {
+    final rs = ref.watch(roomScaleProvider);
+    final rsc = ref.read(roomScaleProvider.notifier);
+    Widget row(String label, String room) =>
+        _slider('$label scale', rs[room] ?? 1.0, 0.3, 4, (v) => rsc.set(room, v), decimals: 2);
+    return [
+      row('advisor', 'advisors-office'),
+      row('workshop', 'workshop-floor'),
+      row('archive', 'archive'),
     ];
   }
 
@@ -273,9 +289,10 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
     final model = ref.watch(workerModelProvider);
     final transit = ref.watch(transitProvider);
     final tp = ref.watch(transitParamsProvider);
+    final walkSpeedPx = ref.watch(skelParamsProvider).walkSpeedPx;
     String renderState(String persona, String room) {
       final wt = transit[persona];
-      if (wt?.active != null) return transitPhaseLabel(wt!.active!, tp);
+      if (wt?.active != null) return transitPhaseLabel(wt!.active!, tp, walkSpeedPx);
       final vr = wt?.visualRoom ?? room;
       return isRenderableRoom(vr) ? '@$vr' : 'NOWHERE:$vr'; // NOWHERE ⇒ the vanish bug, must never show
     }

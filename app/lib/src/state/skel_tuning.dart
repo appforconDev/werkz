@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../world/room_registry.dart';
 import '../world/worker_animations.dart';
 import '../world/worker_sprite.dart' show debugWorkerSprites;
 
@@ -41,4 +42,17 @@ class ForcedSkelStateController extends Notifier<ForcedSkelState> {
   @override
   ForcedSkelState build() => ForcedSkelState.auto;
   void set(ForcedSkelState s) => state = s;
+}
+
+// Per-room worker scale (task 20b-fix-2), live-tunable so Rickard calibrates each
+// floor's camera distance on device. Defaults from the room registry; a worker's
+// rendered height = global height × this room's factor (× persona height scale).
+final roomScaleProvider =
+    NotifierProvider<RoomScaleController, Map<String, double>>(RoomScaleController.new);
+
+class RoomScaleController extends Notifier<Map<String, double>> {
+  @override
+  Map<String, double> build() => {for (final e in kRooms.entries) e.key: e.value.workerScaleFactor};
+  double of(String room) => state[room] ?? 1.0;
+  void set(String room, double v) => state = {...state, room: v};
 }

@@ -90,8 +90,9 @@ class TransitController extends Notifier<Map<String, WorkerTransit>> {
   /// latest room (never skip) — or, while patrolling, bounce to the other end.
   void advance(double dt) {
     final params = ref.read(transitParamsProvider);
+    final walkSpeedPx = ref.read(skelParamsProvider).walkSpeedPx; // the ONE walk speed
     final model = ref.read(workerModelProvider);
-    _watchdog(dt, params, model); // ALWAYS — a stall must never survive silently
+    _watchdog(dt, params, walkSpeedPx, model); // ALWAYS — a stall must never survive silently
     final patrol = _patrolling;
     if (!patrol && !state.values.any((w) => w.active != null)) return; // nothing moving → idle frame
     final next = <String, WorkerTransit>{...state};
@@ -115,7 +116,7 @@ class TransitController extends Notifier<Map<String, WorkerTransit>> {
       if (wt.active == null) continue;
 
       final t = wt.active!.tick(dt);
-      if (t.elapsed < transitTotal(params, t.distance)) {
+      if (t.elapsed < transitTotal(t, params, walkSpeedPx)) {
         next[persona] = WorkerTransit(visualRoom: wt.visualRoom, active: t, jobAtStart: wt.jobAtStart);
         changed = true;
         continue;
@@ -145,12 +146,12 @@ class TransitController extends Notifier<Map<String, WorkerTransit>> {
   // room, or a beat that outstays its deadline — clock stall / orphaned chain) for
   // longer than the longest legit beat + margin, log LOUDLY and snap it to the
   // model's (renderable) room. With the room clamp this path should never run.
-  void _watchdog(double dt, TransitParams params, WorkerModelState model) {
+  void _watchdog(double dt, TransitParams params, double walkSpeedPx, WorkerModelState model) {
     final threshold = math.max(2.0, transitBeat(params, roomDistance('advisors-office', 'archive')) + 0.5);
     List<String>? recover;
     for (final e in state.entries) {
       final wt = e.value;
-      final fRoom = wt.active != null ? transitFrame(wt.active!, params).room : null;
+      final fRoom = wt.active != null ? transitFrame(wt.active!, params, walkSpeedPx).room : null;
       final offView = wt.active != null
           ? (fRoom == null || !isRenderableRoom(fRoom)) // beat, or crossing to an unmounted room
           : !isRenderableRoom(wt.visualRoom); // resting in a storey nothing draws
