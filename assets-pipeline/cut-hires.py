@@ -3,6 +3,20 @@
 # persona's rig-manifest, generate far-side limb DUPLICATES, and a debug overlay.
 # Output → sprites/parts-hires/<persona>/. The low-res parts/ stay as reference.
 #
+# HAND-CLEAN OVERRIDES (task 22b, two layers — both auto-picked when present):
+#  - hires-candidates/<persona>/master-clean.png — Rickard's cleaned master
+#    (background/halo). Used instead of threshold-isolating attempt1-1 (19i).
+#  - hires-candidates/<persona>/parts-clean/<part-name>.png — a hand-cleaned
+#    INDIVIDUAL part, for region spill the master can't fix (cut boxes include
+#    neighboring pixels: the other leg's ankle in a foot crop, torso edge in an
+#    arm crop). Used VERBATIM — no defringe or processing on top. The canvas
+#    size MUST equal the machine region size exactly (pivots/attach-offsets are
+#    part-local fractions; a resized canvas silently corrupts assembly) — a
+#    mismatch or a missing alpha channel FAILS the run loudly, never resizes.
+#    Far-side duplicates + the far-arm prop-strip derive from the near-side part
+#    AFTER override resolution, so a cleaned near limb propagates automatically.
+#    Overrides are reported in the cut log + cut-log.json (read by bindpose-diff).
+#
 # HONEST LIMITS (reported, not hidden):
 #  - Occlusion inpaint is MINIMAL: in the idle-stand side profile the near arm
 #    hangs mostly beside the body, so torso-behind-arm bleed is small at render
@@ -128,25 +142,56 @@ def isolate_clipboard(src, region, masterW, masterH):
 def load_master(persona):
     # Prefer Rickard's hand-cleaned transparent cutout when it exists (task 19i);
     # only decontaminate its edge. Otherwise threshold-isolate attempt1-1.
+    # Returns (image, source-label) so the cut log records what was used.
     clean = f"{ROOT}/sprites/hires-candidates/{persona}/master-clean.png"
     if os.path.exists(clean):
         res = Image.open(clean).convert("RGBA")
         a = defringe(res.split()[3], decontam_rgba=res)
         res.putalpha(a); bb = a.getbbox()
         print(persona, "using hand-cleaned master-clean.png")
-        return res.crop(bb) if bb else res
-    return isolate(f"{ROOT}/sprites/hires-candidates/{persona}/attempt1-1.png")
+        return (res.crop(bb) if bb else res), "master-clean"
+    return isolate(f"{ROOT}/sprites/hires-candidates/{persona}/attempt1-1.png"), "attempt1-1"
 
-for p in ["7a19","3c57","9b72"]:
+def override_path(persona, part_name):
+    return f"{ROOT}/sprites/hires-candidates/{persona}/parts-clean/{part_name}.png"
+
+def load_override(path, expected_size, label):
+    # Rickard's hand-cleaned part, used VERBATIM (task 22b) — never defringed,
+    # never resized. Guard the two ways a file could silently corrupt assembly:
+    im = Image.open(path)
+    if "A" not in im.getbands() and "transparency" not in im.info:
+        raise SystemExit(
+            f"OVERRIDE REJECTED {label}: {path} has NO ALPHA CHANNEL (mode {im.mode}). "
+            f"Export the cleaned part as transparent PNG — an opaque canvas would paint "
+            f"the whole region box over the rig.")
+    im = im.convert("RGBA")
+    if im.size != tuple(expected_size):
+        raise SystemExit(
+            f"OVERRIDE REJECTED {label}: canvas {im.size[0]}x{im.size[1]} != expected region "
+            f"{expected_size[0]}x{expected_size[1]} ({path}). Pivots/attach-offsets are "
+            f"part-local coordinates — a resized canvas silently corrupts assembly. "
+            f"Re-export at the exact machine-cut size (see parts-hires/.../{label.split('/')[-1]}.png); "
+            f"this pipeline NEVER resizes an override.")
+    return im
+
+def cut_persona(p):
     m = json.load(open(f"{ROOT}/sprites/parts/{p}/rig-manifest.json"))
     outdir = f"{ROOT}/sprites/parts-hires/{p}"; os.makedirs(outdir, exist_ok=True)
-    master = load_master(p)
+    master, master_src = load_master(p)
     master.save(f"{outdir}/master-idle.png")
     W,H = master.size
+    overridden = []
     for part in m["parts"]:
         r = part["masterRegion"]
         box = (int(r["x0"]*W), int(r["y0"]*H), int(r["x1"]*W), int(r["y1"]*H))
         crop = master.crop(box)
+        ov = override_path(p, part["name"])
+        if os.path.exists(ov):
+            # Hand-cleaned part replaces the machine cut BEFORE far-side/prop
+            # derivation, so the cleaned near limb propagates to the far side.
+            crop = load_override(ov, (box[2]-box[0], box[3]-box[1]), f"{p}/{part['name']}")
+            overridden.append(part["name"])
+            print(p, "part OVERRIDE:", part["name"], "<- parts-clean/ (hand-cleaned, verbatim)")
         crop.save(f"{outdir}/{part['name']}.png")
         if part["name"] in FAR:
             # Far side is a plain DUPLICATE — NOT flipped (task 19k): in profile
@@ -161,9 +206,10 @@ for p in ["7a19","3c57","9b72"]:
     # lacks it, so its region-cut is empty. If a chosen candidate exists, isolate
     # it and overwrite clipboard.png. Reproducible; regenerate the candidate with
     # clipboard.mjs. It's a distinct near-arm part → never duplicated to the far arm.
+    # A parts-clean/clipboard.png override outranks the generated prop (task 22b).
     chosen = f"{ROOT}/sprites/clipboard-candidates/{p}/chosen.png"
     clip_part = next((x for x in m["parts"] if x["name"] == "clipboard"), None)
-    if clip_part and os.path.exists(chosen):
+    if clip_part and os.path.exists(chosen) and "clipboard" not in overridden:
         isolate_clipboard(chosen, clip_part["masterRegion"], W, H).save(f"{outdir}/clipboard.png")
         print(p, "clipboard from generated prop")
     # debug overlay (manifest regions + pivots on the isolated hi-res master)
@@ -176,4 +222,14 @@ for p in ["7a19","3c57","9b72"]:
         d.ellipse((px_-6,py_-6,px_+6,py_+6), fill=c)
     bg=Image.new("RGBA",ov.size,(52,55,58,255)); bg.alpha_composite(ov)
     bg.convert("RGB").save(f"{outdir}/debug-overlay.png")
-    print(p, "master", master.size, "->", outdir)
+    # Cut log (task 22b): what was hand-cleaned vs machine-cut, always visible.
+    # bindpose-diff.py reads this to mark overridden parts on the diff panel.
+    json.dump({"master": master_src, "overriddenParts": overridden},
+              open(f"{outdir}/cut-log.json", "w"), indent=1)
+    print(p, "master", master.size, f"({master_src})",
+          "overrides:", overridden or "none", "->", outdir)
+
+if __name__ == "__main__":
+    import sys
+    for p in (sys.argv[1:] or ["7a19", "3c57", "9b72"]):
+        cut_persona(p)

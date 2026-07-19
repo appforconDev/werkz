@@ -5,7 +5,7 @@
 # so it shares the real Flame assembly math), right = a silhouette OVERLAY
 # (green = master, magenta = render) with an IoU number. Run the Flutter render
 # test FIRST to refresh _bindpose-render.png, then this.
-import sys
+import json, os, sys
 from PIL import Image, ImageDraw, ImageFont
 
 PERSONA = sys.argv[1] if len(sys.argv) > 1 else "7a19"
@@ -13,6 +13,14 @@ BASE = f"sprites/parts-hires/{PERSONA}"
 
 master = Image.open(f"{BASE}/master-idle.png").convert("RGBA")
 render = Image.open(f"{BASE}/_bindpose-render.png").convert("RGBA")
+
+# Cut provenance (task 22b): which layers are Rickard's hand-cleans vs machine
+# cuts — stamped on the panel so it's always visible what the render is built of.
+cutlog = {"master": "?", "overriddenParts": []}
+if os.path.exists(f"{BASE}/cut-log.json"):
+    cutlog = json.load(open(f"{BASE}/cut-log.json"))
+prov = f"master: {cutlog['master']}   hand-cleaned parts: " + \
+       (", ".join(cutlog["overriddenParts"]) if cutlog["overriddenParts"] else "none")
 
 # Scale both to a common height for the panel + overlay.
 Hp = 460
@@ -53,9 +61,9 @@ for y in range(Hp):
         if a and b: inter += 1
 iou = inter / union if union else 0.0
 
-# 3-panel board.
+# 3-panel board (+18px footer for the cut-provenance line).
 gap = 14
-board = Image.new("RGBA", (m.width + r.width + W + gap * 2, Hp + 26), (24, 25, 27, 255))
+board = Image.new("RGBA", (m.width + r.width + W + gap * 2, Hp + 26 + 18), (24, 25, 27, 255))
 board.paste(m, (0, 26))
 board.paste(r, (m.width + gap, 26))
 board.alpha_composite(overlay, (m.width + r.width + gap * 2, 26))
@@ -68,5 +76,6 @@ d.text((4, 6), "MASTER (bind ref)", fill=(210, 210, 210), font=font)
 d.text((m.width + gap + 4, 6), "BIND-POSE RENDER (real assembly)", fill=(210, 210, 210), font=font)
 d.text((m.width + r.width + gap * 2 + 4, 6),
        f"OVERLAY  green=master magenta=render  IoU={iou:.3f}", fill=(210, 210, 210), font=font)
+d.text((4, Hp + 28), prov, fill=(190, 170, 120), font=font)
 board.convert("RGB").save(f"{BASE}/bindpose-diff.png")
-print(f"{PERSONA}: IoU={iou:.3f} -> {BASE}/bindpose-diff.png")
+print(f"{PERSONA}: IoU={iou:.3f} [{prov}] -> {BASE}/bindpose-diff.png")
