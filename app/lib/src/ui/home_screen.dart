@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import '../debug_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../daemon/daemon_client.dart';
@@ -87,7 +87,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Contested layout constants are LIVE-tunable in debug builds (task 17 C);
     // the defaults are the shipped values.
     final tuning = ref.watch(layoutTuningProvider);
-    final tuningVisible = kDebugMode && ref.watch(layoutTuningPanelVisibleProvider);
+    final tuningVisible = kWerkzDebugTools && ref.watch(layoutTuningPanelVisibleProvider);
 
     // Start the auto-dismiss countdown when a work order reaches COMPLETED.
     ref.listen<WorkshopState>(workshopProvider, (prev, next) {

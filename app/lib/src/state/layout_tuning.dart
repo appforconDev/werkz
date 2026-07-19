@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import '../debug_tools.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'providers.dart' show secureStorageProvider;
 
@@ -149,9 +149,10 @@ final layoutTuningProvider =
 class LayoutTuningController extends Notifier<LayoutTuning> {
   @override
   LayoutTuning build() {
-    // Debug builds persist tuning across restarts (task 17b) so a rebuild doesn't
-    // wipe an in-progress tuning session. Load async; defaults show until it lands.
-    if (kDebugMode) Future.microtask(_load);
+    // The tuning panel persists across restarts (task 17b) so a rebuild doesn't
+    // wipe an in-progress session — gated with the tools so it works in the
+    // release dogfood build too (task 21). Load async; defaults show until it lands.
+    if (kWerkzDebugTools) Future.microtask(_load);
     return const LayoutTuning();
   }
 
@@ -165,14 +166,14 @@ class LayoutTuningController extends Notifier<LayoutTuning> {
 
   void update(LayoutTuning t) {
     state = t;
-    if (kDebugMode) {
+    if (kWerkzDebugTools) {
       ref.read(secureStorageProvider).write(key: _kTuning, value: jsonEncode(t.toJson()));
     }
   }
 
   void reset() {
     state = const LayoutTuning();
-    if (kDebugMode) ref.read(secureStorageProvider).delete(key: _kTuning);
+    if (kWerkzDebugTools) ref.read(secureStorageProvider).delete(key: _kTuning);
   }
 }
 

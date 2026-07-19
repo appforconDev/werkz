@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import '../../debug_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/layout_tuning.dart';
@@ -26,7 +26,7 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
 
   @override
   Widget build(BuildContext context) {
-    if (!kDebugMode) return const SizedBox.shrink();
+    if (!kWerkzDebugTools) return const SizedBox.shrink();
     final t = ref.watch(layoutTuningProvider);
     final c = ref.read(layoutTuningProvider.notifier);
     final mq = MediaQuery.of(context);

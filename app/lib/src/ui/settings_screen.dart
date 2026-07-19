@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../debug_tools.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../build_info.dart';
@@ -65,9 +66,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         backgroundColor: Werkz.machine,
         foregroundColor: Werkz.cream,
         // Long-press opens the debug LAYOUT TUNING panel over the home screen
-        // (task 17 C) — debug builds only, invisible otherwise.
+        // (task 17 C) — gated on kWerkzDebugTools so it survives release (task 21).
         title: GestureDetector(
-          onLongPress: kDebugMode
+          onLongPress: kWerkzDebugTools
               ? () {
                   ref.read(layoutTuningPanelVisibleProvider.notifier).show();
                   Navigator.of(context).pop();
