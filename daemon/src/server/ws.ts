@@ -85,6 +85,10 @@ export function attachWsServer(
           }
           const lastEventId = typeof msg.lastEventId === 'string' ? msg.lastEventId : null;
           const replay = bus.replayAfter(lastEventId).filter((e) => SEVERITY_RANK[e.severity] >= st.minSeverityRank);
+          // Replay observability (task 24.1): whether completion reports ride a
+          // replay is exactly what the next device diagnosis needs in the log.
+          const withReports = replay.filter((e) => (e.payload as { report?: unknown }).report != null).length;
+          log(`WS hello: replaying ${replay.length} events${withReports ? ` (${withReports} carry reports)` : ''} (from=${lastEventId ?? 'start'})`);
           send(ws, {
             type: 'welcome',
             protocolVersion: PROTOCOL_VERSION,

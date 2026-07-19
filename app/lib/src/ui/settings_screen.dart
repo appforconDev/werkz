@@ -141,7 +141,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: const Text('REPLAY INTRODUCTION', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.gunmetal)),
           ),
           TextButton(
+            // Task 24.2: unpairing revokes the session AND voids the workshop's
+            // current QR — an accidental tap reproduces the exact "healthy WS
+            // closes (1000), pairing screen, old QR rejected" device sequence.
+            // The pairing screen must be reachable ONLY by deliberate action,
+            // so this now confirms first.
             onPressed: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: Werkz.cream,
+                  title: const Text('UNPAIR THIS PHONE?',
+                      style: TextStyle(fontFamily: Werkz.mono, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                  content: const Text(
+                      'This revokes the phone\'s session and VOIDS the current pairing QR — '
+                      'you will need to scan a fresh one (`werkz qr`) to reconnect.',
+                      style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.machine)),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(false),
+                      child: const Text('CANCEL', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.gunmetal)),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(true),
+                      child: const Text('UNPAIR', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.stampRed)),
+                    ),
+                  ],
+                ),
+              );
+              if (confirmed != true || !context.mounted) return;
               await ref.read(pairingControllerProvider.notifier).unpair();
               if (context.mounted) Navigator.of(context).popUntil((r) => r.isFirst);
             },

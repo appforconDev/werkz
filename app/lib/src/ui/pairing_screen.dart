@@ -17,15 +17,30 @@ import 'theme.dart';
 // On successful pairing this route POPS itself: the root swaps its home to the
 // workshop underneath the pushed route, so without a pop the app would hang on
 // "Paired…". A 5s watchdog surfaces WHY if navigation ever stalls.
+/// Task 24.3: map daemon rejection reasons to actionable phone copy. The daemon
+/// already rejects with the right reason; the phone's job is to say what to DO.
+String friendlyPairError(String err) {
+  if (err.contains('already used')) {
+    return 'This pairing code was already used — run `werkz qr` on your computer for a fresh one.';
+  }
+  if (err.contains('does not match')) {
+    return 'This QR is from an older workshop session — run `werkz qr` on your computer for a fresh one.';
+  }
+  return err;
+}
+
 class PairingScreen extends ConsumerStatefulWidget {
-  const PairingScreen({super.key});
+  /// Start in manual-entry mode (no camera). Used by tests/goldens — the
+  /// MobileScanner platform channel doesn't exist in the test environment.
+  final bool startManual;
+  const PairingScreen({super.key, this.startManual = false});
   @override
   ConsumerState<PairingScreen> createState() => _PairingScreenState();
 }
 
 class _PairingScreenState extends ConsumerState<PairingScreen> {
   bool _busy = false;
-  bool _manual = false;
+  late bool _manual = widget.startManual;
   String? _status;
   String? _error;
   String? _lastRaw;
@@ -42,7 +57,12 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
     final err = await ref.read(pairingControllerProvider.notifier).pair(p);
     if (!mounted) return;
     if (err != null) {
-      setState(() { _busy = false; _error = err; _status = null; _lastRaw = null; });
+      // Task 24.3: KEEP _lastRaw on failure. Clearing it made the still-visible
+      // QR resubmit on the very next camera frame, whose "pairing…" status WIPED
+      // the error — so a stale QR looped forever and the reason never stayed on
+      // screen (Rickard's six silent scans). Held raw = the same code shows its
+      // reason persistently; a DIFFERENT (fresh) QR still pairs instantly.
+      setState(() { _busy = false; _error = friendlyPairError(err); _status = null; });
       return;
     }
     // Success: the root now shows the workshop under this pushed route — pop to
@@ -67,8 +87,8 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
     if (p != null) {
       _submit(p);
     } else {
+      // Keep _lastRaw here too (task 24.3) — same anti-wipe reasoning as _submit.
       setState(() { _status = null; _error = 'Unreadable code — that is not a WERKZ pairing QR.'; });
-      _lastRaw = null;
     }
   }
 
@@ -101,10 +121,18 @@ class _PairingScreenState extends ConsumerState<PairingScreen> {
     if (_error != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(Icons.error_outline, color: Werkz.stampRed, size: 16),
-          const SizedBox(width: 6),
-          Flexible(child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Werkz.stampRed, fontFamily: Werkz.mono, fontSize: 12))),
+        child: Column(children: [
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            const Icon(Icons.error_outline, color: Werkz.stampRed, size: 16),
+            const SizedBox(width: 6),
+            Flexible(child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Werkz.stampRed, fontFamily: Werkz.mono, fontSize: 12))),
+          ]),
+          // Explicit rescan of the SAME code (the error otherwise holds so the
+          // camera loop can't wipe it — task 24.3).
+          TextButton(
+            onPressed: () => setState(() { _error = null; _lastRaw = null; }),
+            child: const Text('SCAN AGAIN', style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.gunmetal)),
+          ),
         ]),
       );
     }
