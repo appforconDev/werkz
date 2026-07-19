@@ -17,7 +17,7 @@ enum WorkerAnim { idle, walk, workTyping, carryWalk, coffeeIdle }
 /// behaviour); `walkLoop` patrols desk↔coffee within a room; `transitPatrol`
 /// (20b) sends the worker across ROOMS forever to tune inter-room transit; the
 /// rest loop their anim in place.
-enum ForcedSkelState { auto, idle, walkLoop, workTyping, coffeeIdle, transitPatrol }
+enum ForcedSkelState { auto, idle, walkLoop, workTyping, coffeeIdle, transitPatrol, wander }
 
 WorkerAnim animForState(WorkerState s) => switch (s) {
       WorkerState.idle => WorkerAnim.idle,
@@ -54,6 +54,12 @@ class SkelParams {
   // Locomotion (task 19i). walkSpeedPx is the horizontal travel speed while the
   // walk cycle plays — tuned to the stride so the planted foot doesn't slide.
   final double walkSpeedPx;
+  // Idle wander + perspective plane (task 20c). backScale = worker scale at the
+  // BACK floor line (front = 1.0). wanderEverySec = lazy centre of the random rest
+  // interval (min ≈ ×0.5, max ≈ ×1.5). dwellSec = pause at a POI.
+  final double backScale;
+  final double wanderEverySec;
+  final double dwellSec;
 
   const SkelParams({
     // Rickard's device-tuned values (task 20b-fix-2). Global height is the WIDE-shot
@@ -69,9 +75,28 @@ class SkelParams {
     this.workerHeightPx = 80, // Rickard's tuned wide-shot value; Advisor scales up ×2.4 per-room
     this.workerX = 0.5,
     this.walkSpeedPx = 13, // the ONE walk speed — every walking state reads this
+    this.backScale = 0.78, // back-of-room scale (task 20c)
+    this.wanderEverySec = 40, // → a lazy ~20–60 s random rest interval
+    this.dwellSec = 4,
   });
 
-  SkelParams copyWith({double? walkHz, double? legSwing, double? armSwing, double? bob, double? headBob, double? typeHz, double? typeSwing, double? workerHeightPx, double? workerX, double? walkSpeedPx}) =>
+  double get wanderMinSec => wanderEverySec * 0.5;
+  double get wanderMaxSec => wanderEverySec * 1.5;
+
+  SkelParams copyWith(
+          {double? walkHz,
+          double? legSwing,
+          double? armSwing,
+          double? bob,
+          double? headBob,
+          double? typeHz,
+          double? typeSwing,
+          double? workerHeightPx,
+          double? workerX,
+          double? walkSpeedPx,
+          double? backScale,
+          double? wanderEverySec,
+          double? dwellSec}) =>
       SkelParams(
         walkHz: walkHz ?? this.walkHz,
         legSwing: legSwing ?? this.legSwing,
@@ -83,6 +108,9 @@ class SkelParams {
         workerHeightPx: workerHeightPx ?? this.workerHeightPx,
         workerX: workerX ?? this.workerX,
         walkSpeedPx: walkSpeedPx ?? this.walkSpeedPx,
+        backScale: backScale ?? this.backScale,
+        wanderEverySec: wanderEverySec ?? this.wanderEverySec,
+        dwellSec: dwellSec ?? this.dwellSec,
       );
 }
 

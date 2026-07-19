@@ -1,10 +1,16 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
 import '../models/werkz_event.dart';
 import 'rig_manifest.dart';
+import 'wander.dart';
 import 'worker_animations.dart';
 import 'worker_sprite.dart';
+
+/// How far up the band the feet rise from the front floor line to the back one
+/// (fraction of band height) — the perspective plane's depth (task 20c).
+const double kDepthRiseFrac = 0.30;
 
 // The programmatic skeletal player (task 19e — replaces the dropped Rive track).
 // It reads the rig manifest (pivots, z-order, attachParents) and cut part PNGs,
@@ -113,6 +119,13 @@ class SkeletalWorker extends PositionComponent {
   bool _patrolRight = true; // walk-loop direction (task 19j): true = toward coffee
   double? _transitXFrac; // task 20b: while non-null the transit layer drives x + facing
   bool _transitFacingRight = false;
+  double _depth = 0; // task 20c: 0 = front floor line, 1 = back (smaller, higher)
+  Wander _wander = const Wander(); // idle-wander state machine
+  final math.Random _rng = math.Random();
+
+  /// The POIs of the room this worker is currently rendered in (task 20c), set by
+  /// the mount. Empty ⇒ no wander (e.g. the advisor close-up).
+  List<Poi> pois = const [];
 
   /// Per-persona reading offsets (task 19l), EXPOSED not silent: [heightScale]
   /// multiplies the shared workerHeightPx so a tall-thin persona reads taller and
@@ -286,33 +299,58 @@ class SkeletalWorker extends PositionComponent {
     super.update(dt);
     _clock += dt;
 
-    // Locomotion (task 19i) + debug state forcer (task 19j) + transit override
-    // (task 20b). AUTO walks toward the event-driven state's target x; a forced
-    // state overrides it; a transit override overrides everything (the transit
-    // layer positions the worker as it crosses rooms).
-    final s = _buildHeight > 0 ? params.workerHeightPx * heightScale * roomScale / _buildHeight : 1.0;
+    // Locomotion (19i) + state forcer (19j) + transit override (20b) + idle wander
+    // on the perspective plane (20c). AUTO idle drifts to POIs; a forced state
+    // overrides; a transit override overrides everything.
+    final base = _buildHeight > 0 ? params.workerHeightPx * heightScale * roomScale / _buildHeight : 1.0;
     if (_placed) {
       final home = _gameWidth * (homeXFrac ?? params.workerX);
-      final deskX = targetXFor(WorkerState.working, _gameWidth, home);
-      final coffeeX = targetXFor(WorkerState.maintenance, _gameWidth, home);
+      final walkPx = params.walkSpeedPx * roomWalkSpeedFactor;
+      final riseSpan = _floorY * kDepthRiseFrac; // px the feet rise front→back
+      final depthSpeed = riseSpan <= 0 ? 1.0 : walkPx / riseSpan; // depth units/s ≈ walkPx on screen
 
       final WorkerAnim anim;
+      double targetDepth = 0;
       if (_transitXFrac != null) {
         _x = _transitXFrac! * _gameWidth;
         _facingRight = _transitFacingRight;
-        anim = WorkerAnim.walk; // always walking across rooms
+        _depth = 0; // transit runs on the front plane
+        _wander = const Wander();
+        anim = WorkerAnim.walk;
+      } else if (((forced == ForcedSkelState.auto && state == WorkerState.idle) || forced == ForcedSkelState.wander) &&
+          pois.isNotEmpty) {
+        // Idle wander: drift to a random in-room POI, dwell, return, repeat.
+        final cur = _wanderTargetPx(home);
+        final arrivedCur = (cur.x - _x).abs() < 2 && (cur.depth - _depth).abs() < 0.03;
+        _wander = wanderStep(_wander,
+            canWander: true,
+            arrived: arrivedCur,
+            dt: dt,
+            poiCount: pois.length,
+            rand: _rng.nextDouble,
+            minInterval: params.wanderMinSec,
+            maxInterval: params.wanderMaxSec,
+            dwellSec: params.dwellSec);
+        final tgt = _wanderTargetPx(home);
+        targetDepth = tgt.depth;
+        final moving = (tgt.x - _x).abs() > 1 || (tgt.depth - _depth).abs() > 0.01;
+        if ((tgt.x - _x).abs() > 1) _facingRight = tgt.x > _x;
+        _x = stepToward(_x, tgt.x, walkPx, dt);
+        anim = moving ? WorkerAnim.walk : WorkerAnim.idle; // dwell/rest → head-up idle
       } else {
-        // Resolve the state to animate + where (if anywhere) to walk in-room.
+        // No wander: the state/forced walk in x, on the front plane.
+        _wander = const Wander();
         final WorkerState animState;
-        double? moveTarget; // null = stand and loop in place
+        double? moveTarget;
         switch (forced) {
           case ForcedSkelState.auto:
             animState = state;
             moveTarget = targetXFor(state, _gameWidth, home);
           case ForcedSkelState.walkLoop:
             animState = WorkerState.walking;
-            moveTarget = _patrolRight ? coffeeX : deskX;
-          case ForcedSkelState.transitPatrol: // motion is driven by the transit layer
+            moveTarget = _patrolRight ? coffeeX(home) : deskX(home);
+          case ForcedSkelState.transitPatrol:
+          case ForcedSkelState.wander:
           case ForcedSkelState.idle:
             animState = WorkerState.idle;
           case ForcedSkelState.workTyping:
@@ -320,13 +358,11 @@ class SkeletalWorker extends PositionComponent {
           case ForcedSkelState.coffeeIdle:
             animState = WorkerState.maintenance;
         }
-
         var moving = false;
         if (moveTarget != null) {
           moving = (moveTarget - _x).abs() > 0.5;
           if (moving) _facingRight = moveTarget > _x;
-          _x = stepToward(_x, moveTarget, params.walkSpeedPx * roomWalkSpeedFactor, dt);
-          // walk-loop: on arrival, flip the patrol direction → carry on forever.
+          _x = stepToward(_x, moveTarget, walkPx, dt);
           if (!moving && forced == ForcedSkelState.walkLoop) _patrolRight = !_patrolRight;
         }
         final carrying = animState == WorkerState.carrying;
@@ -335,18 +371,32 @@ class SkeletalWorker extends PositionComponent {
             : _stationaryAnim(animForState(animState));
       }
 
-      position = Vector2(_x, _floorY);
+      _depth = stepToward(_depth, targetDepth, depthSpeed, dt);
+      final s = base * depthScale(_depth, params.backScale);
+      position = Vector2(_x, _floorY - _depth * riseSpan); // feet ride up the plane with depth
       final pose = animatePose(anim, _clock, params);
       _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
       final root = _joints[manifest.root.name];
       if (root != null) root.position.y = _rootBaseY + pose.bobY;
-      _farGroup?.position = Vector2(0, pose.bobY); // far side tracks the torso bob
-      // Whole-sprite mirror for facing (same mechanism as the far-side limbs).
+      _farGroup?.position = Vector2(0, pose.bobY);
       scale = Vector2(facingScaleX(s, _facingRight), s);
     } else {
-      // Not yet placed (viewport unknown): hold bind pose at the built size.
-      if (_buildHeight > 0) scale = Vector2.all(s);
+      if (_buildHeight > 0) scale = Vector2.all(base);
     }
+  }
+
+  double deskX(double home) => targetXFor(WorkerState.working, _gameWidth, home);
+  double coffeeX(double home) => targetXFor(WorkerState.maintenance, _gameWidth, home);
+
+  /// The current wander target in px + whether the worker should play the POI's
+  /// (idle) activity there (task 20c).
+  ({double x, double depth, bool activity}) _wanderTargetPx(double home) {
+    final w = _wander;
+    if (w.atPoi && w.poi >= 0 && w.poi < pois.length) {
+      final p = pois[w.poi];
+      return (x: p.x * _gameWidth, depth: p.depth, activity: w.phase == WanderPhase.dwell);
+    }
+    return (x: home, depth: 0.0, activity: false); // rest / home → front, at home x
   }
 
   /// A walk/carry-walk anim with the feet planted becomes idle (no in-place

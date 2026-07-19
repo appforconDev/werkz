@@ -7,6 +7,8 @@
 // entry + art with ZERO new transit logic. The vertical order is the canon
 // layout; the band constants are the existing mount geometry (task 19f), not new.
 
+import 'wander.dart';
+
 class RoomDef {
   final String id;
   final int buildOrder; // 0 = top of the building; canon: advisor 0, workshop 1, archive 2
@@ -48,6 +50,24 @@ const kRooms = <String, RoomDef>{
 };
 
 RoomDef? roomDef(String id) => kRooms[id];
+
+/// Points of interest an idle worker drifts to (task 20c) — registry DATA per
+/// room. Placed at the BACK of the plane, only where the flat room art has no
+/// foreground furniture (so a sprite standing there doesn't clip a painted desk).
+/// The advisor close-up has none for v1. Extend a room = add entries here.
+const Map<String, List<Poi>> kRoomPois = {
+  'workshop-floor': [
+    Poi(0.30, 0.82, PoiActivity.readBoard), // notice board, back center-left
+    Poi(0.66, 0.55, PoiActivity.readBoard), // a rear desk spot
+  ],
+  'archive': [
+    Poi(0.28, 0.84, PoiActivity.browseShelf), // shelf wall, back
+    Poi(0.70, 0.58, PoiActivity.browseShelf), // card catalog
+  ],
+  'advisors-office': [],
+};
+
+List<Poi> poisForRoom(String room) => kRoomPois[room] ?? const [];
 
 /// The interim building draws only [kRooms]. A canonical room that isn't built yet
 /// (test-workshop, octagon, building) folds to the workshop floor so a worker is

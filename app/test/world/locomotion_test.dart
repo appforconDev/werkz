@@ -85,6 +85,11 @@ void main() {
       expect(p.armSwing, 0.41);
       expect(p.bob, 3);
       expect(p.typeSwing, 0.42);
+      expect(p.backScale, 0.78); // 20c perspective-plane back-line scale
+      expect(p.wanderEverySec, 40); // 20c: lazy ~20–60s wander interval
+      expect(p.dwellSec, 4);
+      expect(p.wanderMinSec, 20); // derived range
+      expect(p.wanderMaxSec, 60);
       // sanity: a full walk cycle is ~2s at the slower cadence
       expect(1 / p.walkHz, closeTo(2.0, 1e-9));
     });

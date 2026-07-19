@@ -203,6 +203,10 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('head bob', sp.headBob, 0, 0.3, (v) => spc.update(sp.copyWith(headBob: v)), decimals: 2),
       _slider('type hz', sp.typeHz, 1, 6, (v) => spc.update(sp.copyWith(typeHz: v))),
       _slider('type swing', sp.typeSwing, 0, 1, (v) => spc.update(sp.copyWith(typeSwing: v)), decimals: 2),
+      // Idle wander + perspective plane (task 20c).
+      _slider('back scale', sp.backScale, 0.4, 1, (v) => spc.update(sp.copyWith(backScale: v)), decimals: 2),
+      _slider('wander every', sp.wanderEverySec, 4, 120, (v) => spc.update(sp.copyWith(wanderEverySec: v)), decimals: 0),
+      _slider('dwell', sp.dwellSec, 1, 15, (v) => spc.update(sp.copyWith(dwellSec: v)), decimals: 0),
       ..._transitSliders(),
       ..._roomScaleSliders(),
     ];
@@ -246,6 +250,7 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
     ForcedSkelState.idle: 'IDLE',
     ForcedSkelState.walkLoop: 'WALK',
     ForcedSkelState.transitPatrol: 'PATROL',
+    ForcedSkelState.wander: 'WANDER',
     ForcedSkelState.workTyping: 'TYPE',
     ForcedSkelState.coffeeIdle: 'COFFEE',
   };

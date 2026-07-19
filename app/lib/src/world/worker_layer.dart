@@ -6,6 +6,7 @@ import '../state/transit_provider.dart';
 import '../state/worker_model_provider.dart';
 import 'skeletal_worker.dart';
 import 'rig_manifest.dart';
+import 'room_registry.dart';
 import 'transit.dart';
 import 'worker_animations.dart';
 import 'worker_model.dart';
@@ -44,7 +45,7 @@ class WorkerLayer extends ConsumerStatefulWidget {
 }
 
 class _WorkerLayerState extends ConsumerState<WorkerLayer> {
-  late final _WorkerGame _game = _WorkerGame(widget.renderHeight);
+  late final _WorkerGame _game = _WorkerGame(widget.renderHeight, widget.room);
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +103,7 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
 
 class _WorkerGame extends FlameGame {
   final double renderHeight;
+  final String room;
   final Map<String, RigManifest> _manifests = {}; // preloaded, persona id → manifest
   final Map<String, SkeletalWorker> _mounted = {}; // persona id → live worker
   bool _ready = false;
@@ -110,7 +112,7 @@ class _WorkerGame extends FlameGame {
   ForcedSkelState _forced = ForcedSkelState.auto;
   List<_Mount> _want = const [];
 
-  _WorkerGame(this.renderHeight);
+  _WorkerGame(this.renderHeight, this.room);
 
   @override
   Color backgroundColor() => const Color(0x00000000); // transparent over the room art
@@ -177,6 +179,7 @@ class _WorkerGame extends FlameGame {
       }
       w.roomScale = m.roomScale; // per-room camera scale (blended mid-transit)
       w.roomWalkSpeedFactor = m.roomWalkSpeedFactor; // per-room walk-speed lens
+      w.pois = poisForRoom(room); // idle-wander points of interest (task 20c)
       w.setTransitOverride(m.overrideXFrac, facingRight: m.facingRight);
     }
     _pushViewport();
