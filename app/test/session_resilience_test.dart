@@ -4,6 +4,7 @@
 //     behavior; the pairing screen is reachable solely via explicit unpair
 //     (which now confirms first).
 // (3) A rejected pair shows an actionable reason that STAYS on screen.
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -108,6 +109,11 @@ void main() {
 
   testWidgets('UNPAIR requires confirmation — CANCEL keeps the pairing', (tester) async {
     _pairStore();
+    // Task 26 B (the dead confirm): the daemon-side revoke HANGS (asleep /
+    // off-network) — a confirmed unpair must still wipe locally, instantly.
+    // Before the fix, unpair awaited this forever and the dialog "did nothing".
+    DaemonClient.revokeOverride = (p, s) => Completer<bool>().future; // never completes
+    addTearDown(() => DaemonClient.revokeOverride = null);
     // Mount Settings directly (the navigation there is covered elsewhere).
     await tester.pumpWidget(ProviderScope(
       overrides: [

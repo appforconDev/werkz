@@ -1,3 +1,4 @@
+import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,6 +87,7 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     _game.setMounts(mounts);
     _game.applyParams(skel);
     _game.applyForced(ref.watch(forcedSkelStateProvider));
+    _game.applyOverlay(ref.watch(workerOverlayProvider)); // diagnosis labels (task 26)
     return GameWidget(
       game: _game,
       backgroundBuilder: (_) => const SizedBox(),
@@ -106,13 +108,59 @@ class _WorkerGame extends FlameGame {
   final String room;
   final Map<String, RigManifest> _manifests = {}; // preloaded, persona id → manifest
   final Map<String, SkeletalWorker> _mounted = {}; // persona id → live worker
+  final Map<String, TextComponent> _labels = {}; // task 26 diagnosis overlay
   bool _ready = false;
+  bool _overlay = false;
   Vector2 _gameSize = Vector2.zero();
   SkelParams _params = const SkelParams();
   ForcedSkelState _forced = ForcedSkelState.auto;
   List<_Mount> _want = const [];
 
   _WorkerGame(this.renderHeight, this.room);
+
+  /// Task 26: per-worker floating diagnosis label — animation · facing · near
+  /// shoulder angle. A screenshot of a wrong-looking worker answers "which
+  /// state produced this pose" by itself.
+  void applyOverlay(bool on) {
+    if (_overlay == on) return;
+    _overlay = on;
+    if (!on) {
+      for (final l in _labels.values) {
+        l.removeFromParent();
+      }
+      _labels.clear();
+    }
+  }
+
+  static final _labelStyle = TextPaint(
+    style: const TextStyle(
+      fontFamily: 'monospace', fontSize: 9, color: Color(0xFFFFF2C0),
+      backgroundColor: Color(0xCC1A1C1E),
+    ),
+  );
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    if (!_overlay) return;
+    for (final id in _labels.keys.toList()) {
+      if (!_mounted.containsKey(id)) _labels.remove(id)!.removeFromParent();
+    }
+    for (final e in _mounted.entries) {
+      final w = e.value;
+      final label = _labels.putIfAbsent(e.key, () {
+        final t = TextComponent(textRenderer: _labelStyle, priority: 1000, anchor: Anchor.bottomCenter);
+        add(t);
+        return t;
+      });
+      final anim = w.lastAppliedAnim?.name ?? '—';
+      final angle = w.nearShoulderAngle;
+      label.text =
+          '${e.key.substring(3)} $anim ${w.facingRight ? 'R' : 'L'} ${angle == null ? '?' : angle.toStringAsFixed(2)}';
+      // Float just above the worker's head (position is bottomCenter of the feet).
+      label.position = Vector2(w.position.x, w.position.y - w.scale.y.abs() * w.size.y - 4);
+    }
+  }
 
   @override
   Color backgroundColor() => const Color(0x00000000); // transparent over the room art

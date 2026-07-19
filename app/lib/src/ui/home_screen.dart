@@ -10,6 +10,7 @@ import '../state/providers.dart';
 import '../state/layout_tuning.dart';
 import '../state/narration.dart';
 import 'theme.dart';
+import 'pairing_screen.dart';
 import 'settings_screen.dart';
 import 'work_order_sheet.dart';
 import 'widgets/layout_tuning_panel.dart';
@@ -150,12 +151,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     : () {
                         _woDismiss?.cancel();
                         final wo = ws.workOrder;
-                        ref.read(workshopProvider.notifier).dismissWorkOrder();
+                        ref.read(workshopProvider.notifier)
+                          ..dismissWorkOrder()
+                          ..markReportRead(); // toast-open counts as read (26 E)
                         showWorkReport(context,
                             report: wo.report!,
                             summary: ws.narration[wo.completedEventId],
                             turns: wo.turns);
                       },
+              ),
+            ),
+          // Task 26 E: the latest unread report as a filed document awaiting
+          // pickup — outlives the toast's 2.5s window; one tap opens Form 9-R,
+          // cleared on read. LOG remains the durable archive.
+          if (ws.unreadReport != null)
+            Positioned(
+              right: 10,
+              bottom: 64 + MediaQuery.of(context).viewPadding.bottom,
+              child: _UnreadReportCard(
+                onTap: () {
+                  final r = ws.unreadReport!;
+                  ref.read(workshopProvider.notifier).markReportRead();
+                  showWorkReport(context,
+                      report: r.report, summary: ws.narration[r.eventId], turns: r.turns);
+                },
               ),
             ),
           if (showOverlay)
@@ -418,6 +437,50 @@ class _StatusBar extends ConsumerWidget {
 // Unreachable banner (task 14 B3): the daemon stopped answering across several
 // reconnect attempts. Name the likely causes instead of a silent dead screen —
 // the machine running the workshop must be on and awake.
+// Task 26 E: a filed document awaiting pickup — 1955 paper on a clip, slightly
+// askew, NOT a notification bubble. Tap = collect (opens Form 9-R).
+class _UnreadReportCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _UnreadReportCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: 0.04,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            width: 92,
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+            decoration: BoxDecoration(
+              color: Werkz.manila,
+              border: Border.all(color: Werkz.gunmetal, width: 1.5),
+              boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 5, offset: Offset(1, 3))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  const Icon(Icons.description_outlined, size: 12, color: Werkz.machine),
+                  const SizedBox(width: 4),
+                  Container(width: 7, height: 7, decoration: const BoxDecoration(color: Werkz.stampRed, shape: BoxShape.circle)),
+                ]),
+                const SizedBox(height: 4),
+                const Text('FORM 9-R',
+                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1, color: Werkz.machine)),
+                const Text('REPORT FILED\nTAP TO COLLECT',
+                    style: TextStyle(fontFamily: Werkz.mono, fontSize: 8, height: 1.4, color: Werkz.gunmetal)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _UnreachableBanner extends StatelessWidget {
   const _UnreachableBanner();
   @override
@@ -426,10 +489,10 @@ class _UnreachableBanner extends StatelessWidget {
       width: double.infinity,
       color: Werkz.stampRed,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      child: const Column(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
+          const Row(children: [
             Icon(Icons.cloud_off, color: Colors.white, size: 16),
             SizedBox(width: 8),
             Expanded(
@@ -437,14 +500,31 @@ class _UnreachableBanner extends StatelessWidget {
                   style: TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
             ),
           ]),
-          SizedBox(height: 4),
-          Text('• The computer running the workshop may be asleep or off\n'
+          const SizedBox(height: 4),
+          const Text('• The computer running the workshop may be asleep or off\n'
               '• Your phone may be on a different network than the machine\n'
               '• The workshop (npx werkz) may have been stopped',
               style: TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontSize: 10, height: 1.5)),
-          SizedBox(height: 3),
-          Text('Reconnecting automatically the moment it answers.',
-              style: TextStyle(fontFamily: Werkz.mono, color: Colors.white70, fontSize: 10)),
+          const SizedBox(height: 3),
+          // Auto-reconnect stays PRIMARY (task 24 invariant: a paired app never
+          // degrades on its own). RE-PAIR is the quiet escape hatch for the case
+          // where the session really is gone on the daemon side (task 26 C) —
+          // it opens the scanner; scanning a fresh QR REPLACES the pairing.
+          Row(children: [
+            const Expanded(
+              child: Text('Reconnecting automatically the moment it answers.',
+                  style: TextStyle(fontFamily: Werkz.mono, color: Colors.white70, fontSize: 10)),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 26)),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PairingScreen()),
+              ),
+              child: const Text('RE-PAIR',
+                  style: TextStyle(fontFamily: Werkz.mono, color: Colors.white70, fontSize: 10, letterSpacing: 1)),
+            ),
+          ]),
         ],
       ),
     );

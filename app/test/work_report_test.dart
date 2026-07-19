@@ -113,6 +113,44 @@ void main() {
     expect(find.textContaining('COMPLETED'), findsNothing, reason: 'banner dismissed once the report is open');
   });
 
+  test('live job.completed with report raises the UNREAD card state; replay never does (26 E)', () async {
+    final (container, fake) = await _boot();
+    fake.onEvent!(_ev('e2', 'job.completed', {'source': 'work-order', 'ok': true, 'turns': 2, 'report': _report}), false);
+    final ws = container.read(workshopProvider);
+    expect(ws.unreadReport, isNotNull);
+    expect(ws.unreadReport!.eventId, 'e2');
+
+    container.read(workshopProvider.notifier).markReportRead();
+    expect(container.read(workshopProvider).unreadReport, isNull, reason: 'cleared on read');
+
+    // Replayed history must not resurrect the badge (task 16 B pattern).
+    fake.onWelcome!(const [], false, null, null);
+    fake.onEvent!(_ev('e2', 'job.completed', {'source': 'work-order', 'ok': true, 'report': _report}), true);
+    expect(container.read(workshopProvider).unreadReport, isNull);
+  });
+
+  testWidgets('the unread-report card opens Form 9-R on ONE tap and clears (26 E)', (tester) async {
+    final c = _DrivableWorkshop();
+    await tester.pumpWidget(_app(c));
+    await tester.pump(const Duration(milliseconds: 600));
+
+    c.set(const WorkshopState(conn: ConnState.connected).copyWith(
+      unreadReport: const UnreadReport(report: _report, eventId: 'e2', turns: 2),
+      narration: {'e2': 'Audit filed. Root inspected, nothing seized.'},
+    ));
+    await tester.pump();
+    expect(find.text('FORM 9-R'), findsOneWidget, reason: 'the filed-document card is visible');
+
+    await tester.tap(find.text('FORM 9-R'));
+    await tester.pumpAndSettle();
+    expect(find.byType(WorkReportSheet), findsOneWidget);
+    expect(find.textContaining('ROOT AUDIT'), findsOneWidget);
+
+    Navigator.of(tester.element(find.byType(WorkReportSheet))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('FORM 9-R'), findsNothing, reason: 'collected = read, card gone');
+  });
+
   testWidgets('a job.completed LOG line with a report opens the report sheet', (tester) async {
     final c = _DrivableWorkshop();
     await tester.pumpWidget(_app(c));

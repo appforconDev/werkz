@@ -14,6 +14,23 @@ class OnboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Werkz.cream,
+      // Task 26 C: pairing where the user is — the primary action is PINNED, not
+      // buried below the fold of the onboarding scroll. Opens the QR scanner
+      // directly (same route as the in-flow button).
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+          child: FilledButton(
+            style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PairingScreen()),
+            ),
+            child: const Text('PAIR WORKSHOP',
+                style: TextStyle(fontFamily: Werkz.mono, letterSpacing: 2, fontWeight: FontWeight.w900)),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Stack(
           children: [

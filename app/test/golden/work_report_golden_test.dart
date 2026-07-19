@@ -2,6 +2,11 @@
 // goldenable), multi-device per the standing screenshot rule.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:werkz_app/src/daemon/daemon_client.dart' show ConnState;
+import 'package:werkz_app/src/state/providers.dart';
+import 'package:werkz_app/src/state/skel_tuning.dart';
+import 'package:werkz_app/src/ui/home_screen.dart';
 import 'package:werkz_app/src/ui/theme.dart';
 import 'package:werkz_app/src/ui/widgets/work_report_sheet.dart';
 import 'harness.dart';
@@ -27,9 +32,31 @@ Widget _sheet() => MaterialApp(
       ),
     );
 
+// Task 26 E: the workshop with the unread-report card (a filed document
+// awaiting pickup, bottom-right above the bar).
+class _CardWorkshop extends WorkshopController {
+  @override
+  WorkshopState build() => const WorkshopState(conn: ConnState.connected).copyWith(
+        unreadReport: const UnreadReport(report: _report, eventId: 'e2', turns: 2),
+      );
+}
+
+Widget _homeWithCard() => ProviderScope(
+      overrides: [
+        secureStorageProvider.overrideWithValue(GoldenStorage(pairedStore())),
+        daemonClientBuilderProvider.overrideWithValue((p) => GoldenClient(p.payload, p.sessionToken)),
+        debugWorkerSpritesProvider.overrideWith(WorkersOffController.new),
+        workshopProvider.overrideWith(_CardWorkshop.new),
+      ],
+      child: MaterialApp(theme: Werkz.theme(), home: const HomeScreen()),
+    );
+
 void main() {
   testWidgets('work report — iPhone 12', (t) async {
     await pumpGolden(t, app: _sheet(), name: 'work_report');
+  });
+  testWidgets('unread report card in the workshop — iPhone 12', (t) async {
+    await pumpGolden(t, app: _homeWithCard(), name: 'home_report_card');
   });
   testWidgets('work report — iPhone SE', (t) async {
     await pumpGolden(t, app: _sheet(), name: 'work_report_se', device: deviceSE);

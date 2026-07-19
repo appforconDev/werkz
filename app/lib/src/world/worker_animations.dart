@@ -197,7 +197,11 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p,
       final b = _sin(2 * math.pi * 0.2 * t); // ambient rate halved (19i)
       return Pose({
         'arm-upper': -0.9, // one arm raised to the face (shoulder only, elbow locked)
-        'arm-lower': _elbowLock,
+        // Task 26: the FAR arm was absent here → reset to 0 = the authored hang,
+        // which sits behind vertical (the 23/25 bug class) — a worker standing
+        // in coffee (every post-job wind-down) showed an arm behind the back.
+        'arm-upper-far': idleArmForward + 0.03 * b,
+        'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'head': p.headBob * b * 0.4 - 0.04,
         'torso': 0.01 * b,
       }, p.bob * 0.2 * b);

@@ -33,6 +33,19 @@ class SkelParamsController extends Notifier<SkelParams> {
   void reset() => state = const SkelParams();
 }
 
+// On-device worker diagnosis overlay (task 26): per-worker floating label with
+// the current animation, facing (L/R), and near-shoulder angle — so a screenshot
+// of a wrong-looking worker is self-diagnosing. Permanent debug tool, toggled in
+// the LAYOUT TUNING panel; off by default.
+final workerOverlayProvider =
+    NotifierProvider<WorkerOverlayController, bool>(WorkerOverlayController.new);
+
+class WorkerOverlayController extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool v) => state = v;
+}
+
 // Debug state forcer (task 19j) — pins the worker to a sustained state so Rickard
 // can tune sliders against it; auto = follow real events (shipping behaviour).
 final forcedSkelStateProvider =

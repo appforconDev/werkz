@@ -45,21 +45,26 @@ Future<SkeletalWorker> _worker(RigManifest manifest, String persona) async {
   return w;
 }
 
-Future<Image> _frame(SkeletalWorker worker, int frameW, int frameH) async {
-  // Neutralize placement/facing so the strip shows the authored LEFT-FACING
-  // rig; joint angles + bob stay applied.
+Future<Image> _frame(SkeletalWorker worker, int frameW, int frameH, {bool facingRight = false}) async {
+  // Neutralize placement so the strip shows the pose; joint angles + bob stay
+  // applied. Task 26: BOTH facings render — right-facing uses the exact device
+  // mirror (negative x-scale, facingScaleX semantics), so a facing-dependent
+  // pose bug can't hide behind a left-only harness.
   worker.anchor = Anchor.topLeft;
-  worker.position = Vector2.zero();
-  worker.scale = Vector2.all(1);
+  worker.scale = Vector2(facingRight ? -1 : 1, 1);
+  // With a topLeft anchor and negative x-scale the content spans [-w, 0] —
+  // shift the component right by its width so the frame stays in view.
+  worker.position = Vector2(facingRight ? worker.size.x : 0, 0);
   final manifest = worker.manifest;
   final rec = PictureRecorder();
   final canvas = Canvas(rec)..translate(20, 10);
   worker.renderTree(canvas);
-  // Vertical guide through the NEAR shoulder pivot (arm-upper pivot in master
-  // fractions × render width): forward-of-vertical is judged against this line.
+  // Vertical guide through the NEAR shoulder pivot (mirrored with the facing):
+  // forward-of-vertical is judged against this line in EITHER facing.
   final armUpper = manifest.part('arm-upper');
   if (armUpper != null) {
-    final px = armUpper.pivotInMaster.dx * worker.size.x;
+    final raw = armUpper.pivotInMaster.dx * worker.size.x;
+    final px = facingRight ? worker.size.x - raw : raw;
     canvas.drawLine(Offset(px, -10), Offset(px, frameH.toDouble()),
         Paint()..color = const Color(0xFFFF0000)..strokeWidth = 2);
   }
@@ -139,10 +144,14 @@ void main() {
         const dt = 1 / 60.0;
         final frames = <String, Image>{};
         var frameW = 0, frameH = 0;
+        // Every stationary capture renders BOTH facings (task 26): the device
+        // mirrors the whole rig when a worker faces right after a walk, and a
+        // facing-dependent bias bug would be invisible in a left-only harness.
         Future<void> capture(String label) async {
           frameW = worker.size.x.ceil() + 40;
           frameH = worker.size.y.ceil() + 20;
           frames[label] = await _frame(worker, frameW, frameH);
+          frames['$label-R'] = await _frame(worker, frameW, frameH, facingRight: true);
           captured.add(label);
         }
 
@@ -183,12 +192,12 @@ void main() {
           }
         }
         if (captured.containsAll(wanted)) {
-          final order = ['rest', 'toPoi', 'dwell', 'home-walk', 'post-rest'];
+          final order = ['rest', 'rest-R', 'toPoi', 'dwell', 'dwell-R', 'home-walk', 'post-rest', 'post-rest-R'];
           final out = '../assets-pipeline/sprites/parts-hires/$persona/_phase-state-driven.png';
           await _saveStrip([for (final k in order) frames[k]!], frameW, frameH, out);
           stripSaved = true;
           // ignore: avoid_print
-          print('state-driven strip $persona (rest|toPoi|dwell|home-walk|post-rest) -> $out');
+          print('state-driven strip $persona (rest|rest-R|toPoi|dwell|dwell-R|home-walk|post-rest|post-rest-R) -> $out');
         }
       });
 

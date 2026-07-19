@@ -157,6 +157,12 @@ class SkeletalWorker extends PositionComponent {
   /// Test/diagnosis window into the wander choreography (task 25 harness).
   WanderPhase get debugWanderPhase => _wander.phase;
 
+  /// Diagnosis surface for the on-device overlay (task 26): current facing and
+  /// the near shoulder's applied angle — with [lastAppliedAnim], a screenshot
+  /// of a wrong-looking worker becomes self-diagnosing.
+  bool get facingRight => _facingRight;
+  double? get nearShoulderAngle => _joints['arm-upper']?.angle;
+
   SkeletalWorker({
     required this.manifest,
     required this.imageFolder,

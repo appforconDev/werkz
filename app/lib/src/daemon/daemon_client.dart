@@ -212,13 +212,22 @@ class DaemonClient {
     }
   }
 
+  // Test seam (task 26): widget tests stub the revoke network call.
+  static Future<bool> Function(PairingPayload, String)? revokeOverride;
+
   /// Revoke this phone's session on the daemon and make it reissue a fresh QR.
+  /// TIMEBOXED (task 26 — the dead unpair modal): without a timeout, a daemon
+  /// that is asleep/off-network hung this await FOREVER, so a confirmed unpair
+  /// appeared to do nothing. The local wipe must never wait on the network.
   static Future<bool> revokeSession(PairingPayload payload, String sessionToken) async {
+    if (revokeOverride != null) return revokeOverride!(payload, sessionToken);
     try {
-      final res = await http.post(
-        Uri.parse('${payload.httpBase}/unpair'),
-        headers: {'content-type': 'application/json', 'authorization': 'Bearer $sessionToken'},
-      );
+      final res = await http
+          .post(
+            Uri.parse('${payload.httpBase}/unpair'),
+            headers: {'content-type': 'application/json', 'authorization': 'Bearer $sessionToken'},
+          )
+          .timeout(const Duration(seconds: 3));
       return res.statusCode == 200;
     } catch (_) {
       return false; // daemon unreachable — local wipe still proceeds

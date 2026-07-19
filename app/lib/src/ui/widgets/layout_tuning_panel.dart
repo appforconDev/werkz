@@ -194,6 +194,22 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
           ),
         ]),
       ),
+      // Diagnosis OVERLAY (task 26): per-worker anim · facing · shoulder-angle
+      // labels in the world, so a device screenshot self-diagnoses pose bugs.
+      SizedBox(
+        height: 30,
+        child: Row(children: [
+          const SizedBox(
+            width: 118,
+            child: Text('OVERLAY', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.cream, fontSize: 10, fontWeight: FontWeight.bold)),
+          ),
+          Switch(
+            value: ref.watch(workerOverlayProvider),
+            activeThumbColor: Werkz.approvalGreen,
+            onChanged: (v) => ref.read(workerOverlayProvider.notifier).set(v),
+          ),
+        ]),
+      ),
       _stateForcer(),
       _workerReadout(),
       _slider('worker height', sp.workerHeightPx, 50, 300, (v) => spc.update(sp.copyWith(workerHeightPx: v)), decimals: 0),

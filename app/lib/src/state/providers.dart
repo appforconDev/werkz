@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart'; // WidgetsBinding lifecycle observer (task 22 B)
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,9 +58,13 @@ class PairingController extends AsyncNotifier<StoredPairing?> {
   Future<void> unpair() async {
     // (a) tell the daemon to revoke this session and reissue a fresh QR,
     // (b) wipe stored token + key. Root then rebuilds a FRESH PairingScreen.
+    // Task 26 (the dead confirm): the revoke call is FIRE-AND-FORGET (plus a 3s
+    // timeout inside revokeSession) — awaiting it hung the whole unpair forever
+    // when the daemon was asleep/off-network, so the confirmed dialog appeared
+    // to do nothing. The local wipe is the user's decision; it happens NOW.
     final current = state.asData?.value;
     if (current != null) {
-      await DaemonClient.revokeSession(current.payload, current.sessionToken);
+      unawaited(DaemonClient.revokeSession(current.payload, current.sessionToken));
     }
     await _s.deleteAll();
     state = const AsyncData(null);
@@ -85,6 +90,17 @@ class WorkOrderStatus {
   const WorkOrderStatus({this.phase = WorkOrderPhase.idle, this.reason, this.turns, this.report, this.completedEventId});
 }
 
+// Task 26 E: the latest UNREAD completion report — surfaced as a filed-document
+// card in the workshop view (one tap to open, cleared on read). LIVE-only, like
+// the banner (task 16 B: replay never resurrects attention UI); the LOG stays
+// the durable path to every report.
+class UnreadReport {
+  final String report;
+  final String eventId; // keys the Haiku summary line
+  final int? turns;
+  const UnreadReport({required this.report, required this.eventId, this.turns});
+}
+
 // --- Live workshop state fed by the WS channel ---
 class WorkshopState {
   final ConnState conn;
@@ -103,6 +119,8 @@ class WorkshopState {
   final bool unreachable;
   // Connection health for the debug CONNECTION readout (task 22 B).
   final ConnStats connStats;
+  // Latest unread completion report (task 26 E) — null once read.
+  final UnreadReport? unreadReport;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -117,6 +135,7 @@ class WorkshopState {
     this.workOrder = const WorkOrderStatus(),
     this.unreachable = false,
     this.connStats = const ConnStats(),
+    this.unreadReport,
   });
 
   WorkshopState copyWith({
@@ -132,6 +151,8 @@ class WorkshopState {
     WorkOrderStatus? workOrder,
     bool? unreachable,
     ConnStats? connStats,
+    UnreadReport? unreadReport,
+    bool clearUnreadReport = false,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -146,6 +167,7 @@ class WorkshopState {
         workOrder: workOrder ?? this.workOrder,
         unreachable: unreachable ?? this.unreachable,
         connStats: connStats ?? this.connStats,
+        unreadReport: clearUnreadReport ? null : (unreadReport ?? this.unreadReport),
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -261,6 +283,7 @@ class WorkshopController extends Notifier<WorkshopState> {
     var autopilot = state.autopilot;
     var mode = state.permissionMode;
     var workOrder = state.workOrder;
+    UnreadReport? unread;
 
     switch (e.eventType) {
       case 'worker.dispatched':
@@ -269,12 +292,18 @@ class WorkshopController extends Notifier<WorkshopState> {
         }
         break;
       case 'job.completed':
+        final rep = e.payload['report'] as String?;
         workOrder = WorkOrderStatus(
           phase: WorkOrderPhase.completed,
           turns: e.payload['turns'] as int?,
-          report: e.payload['report'] as String?,
+          report: rep,
           completedEventId: e.eventId,
         );
+        // Task 26 E: a live completion with a report becomes the unread card in
+        // the workshop view — it outlives the toast's 2.5s self-dismiss.
+        if (rep != null) {
+          unread = UnreadReport(report: rep, eventId: e.eventId, turns: e.payload['turns'] as int?);
+        }
         break;
       case 'job.failed':
         workOrder = WorkOrderStatus(phase: WorkOrderPhase.failed, reason: e.payload['reason'] as String?);
@@ -305,7 +334,15 @@ class WorkshopController extends Notifier<WorkshopState> {
         mode = e.payload['mode'] as String?;
         break;
     }
-    state = state.copyWith(feed: feed, pending: pending, autopilot: autopilot, permissionMode: mode, workOrder: workOrder);
+    state = state.copyWith(
+        feed: feed, pending: pending, autopilot: autopilot, permissionMode: mode, workOrder: workOrder,
+        unreadReport: unread);
+  }
+
+  /// The unread report was opened (card or toast) — clear the badge (task 26 E).
+  void markReportRead() {
+    if (_disposed) return;
+    state = state.copyWith(clearUnreadReport: true);
   }
 
   /// Release the top decision; optimistically remove it from the queue.

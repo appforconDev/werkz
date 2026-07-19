@@ -60,6 +60,21 @@ void main() {
     }
   });
 
+  test('NO stationary anim leaves the far shoulder at the authored hang (26)', () {
+    // The 23/25/26 bug class: an animation that omits a shoulder resets it to 0
+    // = the art's behind-vertical hang. Every stationary animation must place
+    // BOTH shoulders explicitly, and the far one never behind the back.
+    const p = SkelParams();
+    for (final anim in [WorkerAnim.idle, WorkerAnim.workTyping, WorkerAnim.coffeeIdle]) {
+      for (var t = 0.0; t <= 5.0; t += 0.5) {
+        final pose = animatePose(anim, t, p);
+        expect(pose.angles.containsKey('arm-upper'), isTrue, reason: '$anim must place the near shoulder');
+        expect(pose.angles.containsKey('arm-upper-far'), isTrue, reason: '$anim must place the far shoulder');
+        expect(pose.angles['arm-upper-far']!, lessThan(0), reason: '$anim far arm behind the back at t=$t');
+      }
+    }
+  });
+
   test('idle is calm (small angles), work-typing taps from the shoulder', () {
     const p = SkelParams();
     final idle = animatePose(WorkerAnim.idle, 0.3, p);
