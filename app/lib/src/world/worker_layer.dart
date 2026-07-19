@@ -171,6 +171,7 @@ class _WorkerGame extends FlameGame {
           params: _params,
           heightScale: spec.heightScale,
           homeXFrac: spec.homeXFrac,
+          idleArmForward: spec.idleArmForward, // per-persona forward-of-vertical bias (task 25)
         )..forced = _forced;
         _mounted[m.persona] = w;
         add(w);

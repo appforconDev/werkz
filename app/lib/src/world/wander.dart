@@ -56,6 +56,11 @@ Wander wanderStep(
   final timer = w.timer - dt;
   switch (w.phase) {
     case WanderPhase.rest:
+      // Task 25: a PRISTINE rest (never-seeded timer — a fresh mount) seeds its
+      // lazy interval instead of instantly wandering. Without this, every
+      // worker started drifting on frame one; the spec order is rest → POI.
+      // A LEGIT expiring rest always ENTERS with timer > 0 and runs out below.
+      if (w.timer <= 0) return Wander(phase: WanderPhase.rest, timer: _interval(rand, minInterval, maxInterval));
       if (timer > 0) return Wander(phase: WanderPhase.rest, timer: timer);
       final poi = (rand() * poiCount).floor().clamp(0, poiCount - 1);
       return Wander(phase: WanderPhase.toPoi, poi: poi);

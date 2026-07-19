@@ -1,28 +1,81 @@
-// Task 23A: render the ACTUAL SkeletalWorker at sampled PHASES of each
-// animation (not just bind pose), so arm/leg swing DIRECTION can be verified
-// visually against the real Flame assembly — the same no-divergence principle
-// as bindpose_render_test.dart. Writes one frame-strip PNG per persona+anim to
-// the assets pipeline (underscore prefix = gitignored working artifact).
+// Task 23A/25: render the ACTUAL SkeletalWorker at sampled phases of each
+// animation AND — the task-25 harness gap — through the SAME state machine the
+// device runs (AUTO + idle wander: rest / walk-to-POI / dwell / walk home), so
+// a divergence between "the animation is right" and "the device standing state
+// is right" can never pass green again. Every frame carries a RED VERTICAL
+// GUIDE through the near shoulder pivot: the arm silhouette must read FORWARD
+// (left, in the authored left-facing frame) of that line — "forward of the
+// vertical" is decided against the line, not against the previous frame.
+// Strips land in the assets pipeline (underscore prefix = gitignored).
 import 'dart:io';
 import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:werkz_app/src/world/rig_manifest.dart';
+import 'package:werkz_app/src/world/room_registry.dart';
 import 'package:werkz_app/src/world/skeletal_worker.dart';
+import 'package:werkz_app/src/world/wander.dart';
 import 'package:werkz_app/src/world/worker_animations.dart';
+import 'package:werkz_app/src/world/worker_model.dart';
+import 'package:werkz_app/src/world/worker_sprite.dart';
 
 const _personas = ['7a19', '3c57', '9b72'];
 
-// (anim label, forced state, sample times in seconds — quarter phases of the
-// anim's cycle at default params: idle 4s, walk 2s @0.5Hz, type ~0.59s @1.7Hz,
-// coffee 5s @0.2Hz.)
+// (anim label, forced state, sample times — quarter phases at default params.)
 const _anims = [
   ('idle', ForcedSkelState.idle, [0.0, 1.0, 2.0, 3.0]),
   ('walk', ForcedSkelState.walkLoop, [0.0, 0.5, 1.0, 1.5]),
   ('type', ForcedSkelState.workTyping, [0.0, 0.15, 0.29, 0.44]),
   ('coffee', ForcedSkelState.coffeeIdle, [0.0, 1.25, 2.5, 3.75]),
 ];
+
+PersonaSpec _specFor(String folder) => kRoster.firstWhere((p) => p.folder == folder);
+
+Future<SkeletalWorker> _worker(RigManifest manifest, String persona) async {
+  final spec = _specFor(persona);
+  final w = SkeletalWorker(
+    manifest: manifest,
+    imageFolder: 'workers/$persona',
+    renderHeight: 300,
+    idleArmForward: spec.idleArmForward, // the DEVICE value, not the default
+  );
+  await w.onLoad();
+  w.setViewport(800, 500);
+  return w;
+}
+
+Future<Image> _frame(SkeletalWorker worker, int frameW, int frameH) async {
+  // Neutralize placement/facing so the strip shows the authored LEFT-FACING
+  // rig; joint angles + bob stay applied.
+  worker.anchor = Anchor.topLeft;
+  worker.position = Vector2.zero();
+  worker.scale = Vector2.all(1);
+  final manifest = worker.manifest;
+  final rec = PictureRecorder();
+  final canvas = Canvas(rec)..translate(20, 10);
+  worker.renderTree(canvas);
+  // Vertical guide through the NEAR shoulder pivot (arm-upper pivot in master
+  // fractions × render width): forward-of-vertical is judged against this line.
+  final armUpper = manifest.part('arm-upper');
+  if (armUpper != null) {
+    final px = armUpper.pivotInMaster.dx * worker.size.x;
+    canvas.drawLine(Offset(px, -10), Offset(px, frameH.toDouble()),
+        Paint()..color = const Color(0xFFFF0000)..strokeWidth = 2);
+  }
+  return rec.endRecording().toImage(frameW, frameH);
+}
+
+Future<void> _saveStrip(List<Image> frames, int frameW, int frameH, String out) async {
+  final rec = PictureRecorder();
+  final canvas = Canvas(rec);
+  for (var i = 0; i < frames.length; i++) {
+    canvas.drawImage(frames[i], Offset(i * frameW.toDouble(), 0), Paint());
+  }
+  final strip = await rec.endRecording().toImage(frameW * frames.length, frameH);
+  final bytes = await strip.toByteData(format: ImageByteFormat.png);
+  File(out).writeAsBytesSync(bytes!.buffer.asUint8List());
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,14 +89,7 @@ void main() {
           final frames = <Image>[];
           var frameW = 0, frameH = 0;
           for (final t in times) {
-            // Fresh worker per frame → deterministic clock from zero.
-            final worker = SkeletalWorker(
-              manifest: manifest,
-              imageFolder: 'workers/$persona',
-              renderHeight: 300,
-            );
-            await worker.onLoad();
-            worker.setViewport(800, 500);
+            final worker = await _worker(manifest, persona); // fresh → clock from zero
             worker.forced = forced;
             var clock = 0.0;
             const dt = 1 / 60.0;
@@ -51,32 +97,115 @@ void main() {
               worker.update(dt);
               clock += dt;
             }
-            // Neutralize placement/facing so the strip shows the authored
-            // LEFT-FACING rig; the joint angles + bob stay applied.
-            worker.anchor = Anchor.topLeft;
-            worker.position = Vector2.zero();
-            worker.scale = Vector2.all(1);
-            frameW = worker.size.x.ceil() + 40; // margin for swing + bob
+            frameW = worker.size.x.ceil() + 40;
             frameH = worker.size.y.ceil() + 20;
-            final rec = PictureRecorder();
-            final canvas = Canvas(rec)..translate(20, 10);
-            worker.renderTree(canvas);
-            frames.add(await rec.endRecording().toImage(frameW, frameH));
+            frames.add(await _frame(worker, frameW, frameH));
           }
-          // Compose the strip: frames left→right = the sampled phases.
-          final rec = PictureRecorder();
-          final canvas = Canvas(rec);
-          for (var i = 0; i < frames.length; i++) {
-            canvas.drawImage(frames[i], Offset(i * frameW.toDouble(), 0), Paint());
-          }
-          final strip = await rec.endRecording().toImage(frameW * frames.length, frameH);
-          final bytes = await strip.toByteData(format: ImageByteFormat.png);
           final out = '../assets-pipeline/sprites/parts-hires/$persona/_phase-$label.png';
-          File(out).writeAsBytesSync(bytes!.buffer.asUint8List());
+          await _saveStrip(frames, frameW, frameH, out);
           // ignore: avoid_print
           print('phase strip $persona/$label (t=$times) -> $out');
         }
       });
+    });
+
+    test('render $persona STATE-DRIVEN strips — AUTO + wander, the device path', () async {
+      // NOTE: every assertion lives OUTSIDE runAsync — a TestFailure thrown
+      // inside a plain test()'s runAsync closure can be SWALLOWED (observed:
+      // the test showed green while its expects failed). The closure only
+      // simulates + collects; the expects on the collected results run after.
+      final violations = <String>[];
+      final captured = <String>{};
+      var stripSaved = false;
+      await (TestWidgetsFlutterBinding.instance).runAsync(() async {
+        Flame.images.clearCache();
+        final manifest = await RigManifest.load('assets/workers/$persona/rig-manifest.json');
+        final worker = await _worker(manifest, persona);
+        // The DEVICE configuration: AUTO, model-idle, a real room's POIs, and a
+        // short wander interval so the cycle completes in test time.
+        worker.forced = ForcedSkelState.auto;
+        worker.state = WorkerState.idle;
+        worker.pois = poisForRoom('workshop-floor');
+        if (worker.pois.isEmpty) {
+          violations.add('no POIs — the harness must exercise the wander branch');
+          return;
+        }
+        worker.params = const SkelParams(wanderEverySec: 2);
+
+        // Drive through a full wander cycle, capturing one frame per phase.
+        // Every frame must have applied a NAMED animation (task 25 invariant),
+        // and the STATIONARY wander phases (rest/dwell) must drive exactly the
+        // fixed idle — a walk cycle on a planted worker was the device bug.
+        const dt = 1 / 60.0;
+        final frames = <String, Image>{};
+        var frameW = 0, frameH = 0;
+        Future<void> capture(String label) async {
+          frameW = worker.size.x.ceil() + 40;
+          frameH = worker.size.y.ceil() + 20;
+          frames[label] = await _frame(worker, frameW, frameH);
+          captured.add(label);
+        }
+
+        var clock = 0.0;
+        var sawHome = false;
+        const wanted = {'rest', 'toPoi', 'dwell', 'home-walk', 'post-rest'};
+        while (clock < 300 && !captured.containsAll(wanted)) {
+          worker.update(dt);
+          clock += dt;
+          final anim = worker.lastAppliedAnim;
+          if (anim == null) {
+            violations.add('unposed frame at t=${clock.toStringAsFixed(2)}');
+            break;
+          }
+          final phase = worker.debugWanderPhase;
+          // THE invariant this harness exists for: stationary wander phases
+          // resolve to idle (the fixed animation) — never walk, never nothing.
+          if ((phase == WanderPhase.rest || phase == WanderPhase.dwell) && anim != WorkerAnim.idle) {
+            violations.add('stationary $phase drove $anim at t=${clock.toStringAsFixed(2)}');
+            break;
+          }
+          if (phase == WanderPhase.rest && anim == WorkerAnim.idle && !sawHome && !captured.contains('rest')) {
+            await capture('rest');
+          }
+          if (phase == WanderPhase.toPoi && anim == WorkerAnim.walk && !captured.contains('toPoi')) {
+            await capture('toPoi');
+          }
+          if (phase == WanderPhase.dwell && !captured.contains('dwell')) {
+            await capture('dwell');
+          }
+          if (phase == WanderPhase.home) sawHome = true;
+          if (phase == WanderPhase.home && anim == WorkerAnim.walk && !captured.contains('home-walk')) {
+            await capture('home-walk');
+          }
+          // Post-cycle rest = the "standing mid-room after a wander" device state.
+          if (sawHome && phase == WanderPhase.rest && !captured.contains('post-rest')) {
+            await capture('post-rest');
+          }
+        }
+        if (captured.containsAll(wanted)) {
+          final order = ['rest', 'toPoi', 'dwell', 'home-walk', 'post-rest'];
+          final out = '../assets-pipeline/sprites/parts-hires/$persona/_phase-state-driven.png';
+          await _saveStrip([for (final k in order) frames[k]!], frameW, frameH, out);
+          stripSaved = true;
+          // ignore: avoid_print
+          print('state-driven strip $persona (rest|toPoi|dwell|home-walk|post-rest) -> $out');
+        }
+      });
+
+      expect(violations, isEmpty);
+      expect(captured, containsAll(['rest', 'toPoi', 'dwell', 'home-walk', 'post-rest']),
+          reason: 'full wander cycle not observed within 300 simulated seconds');
+      expect(stripSaved, isTrue);
+
+      // Joint-space lock: both shoulders strictly FORWARD across a full idle
+      // cycle at THIS persona's bias (the forward-of-VERTICAL art check is the
+      // viewed strip + red pivot guide).
+      final spec = _specFor(persona);
+      for (var t = 0.0; t <= 4.0; t += 0.25) {
+        final pose = animatePose(WorkerAnim.idle, t, const SkelParams(), idleArmForward: spec.idleArmForward);
+        expect(pose.angles['arm-upper']!, lessThan(0), reason: '$persona near arm behind at t=$t');
+        expect(pose.angles['arm-upper-far']!, lessThan(0), reason: '$persona far arm behind at t=$t');
+      }
     });
   }
 }

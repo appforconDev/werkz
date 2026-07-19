@@ -47,8 +47,16 @@ void main() {
       expect(out.phase, WanderPhase.toPoi);
       expect(out.poi, 0);
       // a near-1 roll still stays in range (never poiCount)
-      final hi = step(const Wander(phase: WanderPhase.rest, timer: 0), canWander: true, rand: 0.999, poiCount: 2);
+      final hi = step(const Wander(phase: WanderPhase.rest, timer: 0.05), canWander: true, dt: 0.1, rand: 0.999, poiCount: 2);
       expect(hi.poi, inInclusiveRange(0, 1));
+    });
+
+    test('a PRISTINE rest seeds its interval — no frame-one wander (task 25)', () {
+      // Fresh mount: Wander() has a never-seeded timer. It must REST first
+      // (spec order rest → POI), not pick a POI on the first tick.
+      final out = step(const Wander(), canWander: true, rand: 0.5);
+      expect(out.phase, WanderPhase.rest);
+      expect(out.timer, greaterThan(0), reason: 'the lazy interval must be seeded');
     });
 
     test('arriving at the POI starts the dwell timer; it counts down to home', () {

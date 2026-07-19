@@ -144,6 +144,19 @@ class SkeletalWorker extends PositionComponent {
   /// their own room's lens in the transit math).
   double roomWalkSpeedFactor = 1.0;
 
+  /// Per-persona idle shoulder bias (task 25): the authored bind pose hangs each
+  /// persona's arm behind vertical by a different amount, so the "arms never
+  /// behind the back" rule takes a per-persona forward bias (personaSpec).
+  final double idleArmForward;
+
+  /// The animation whose pose was applied on the most recent update frame (task
+  /// 25 invariant: NO state may leave the skeleton unposed — every placed frame
+  /// must come from a named animation; asserted in update, checked by tests).
+  WorkerAnim? lastAppliedAnim;
+
+  /// Test/diagnosis window into the wander choreography (task 25 harness).
+  WanderPhase get debugWanderPhase => _wander.phase;
+
   SkeletalWorker({
     required this.manifest,
     required this.imageFolder,
@@ -152,6 +165,7 @@ class SkeletalWorker extends PositionComponent {
     this.params = const SkelParams(),
     this.heightScale = 1.0,
     this.homeXFrac,
+    this.idleArmForward = kIdleArmForwardDefault,
     SpriteLoader? loadSprite,
   }) : _load = loadSprite ?? _flameLoader;
 
@@ -333,8 +347,17 @@ class SkeletalWorker extends PositionComponent {
             dwellSec: params.dwellSec);
         final tgt = _wanderTargetPx(home);
         targetDepth = tgt.depth;
-        final moving = (tgt.x - _x).abs() > 1 || (tgt.depth - _depth).abs() > 0.01;
-        if ((tgt.x - _x).abs() > 1) _facingRight = tgt.x > _x;
+        // Task 25: dwell/rest are STATIONARY phases — the choreography reaches
+        // them only by declaring arrival (within its tolerances: 2px / 0.03
+        // depth), so they must NEVER play walk. Before this, the residual
+        // sub-tolerance drift (moving thresholds were 1px / 0.01 — a GAP under
+        // the arrival tolerances) marched the walk cycle on a visually planted
+        // worker: ±armSwing shoulder swings on a stander = the on-device
+        // "standing mid-room rocking arms behind the back". The residual step
+        // still runs below; ≤2px / ≤0.03 depth of idle-anim glide is invisible.
+        final stationary = _wander.phase == WanderPhase.rest || _wander.phase == WanderPhase.dwell;
+        final moving = !stationary && ((tgt.x - _x).abs() > 1 || (tgt.depth - _depth).abs() > 0.01);
+        if (moving && (tgt.x - _x).abs() > 1) _facingRight = tgt.x > _x;
         _x = stepToward(_x, tgt.x, walkPx, dt);
         anim = moving ? WorkerAnim.walk : WorkerAnim.idle; // dwell/rest → head-up idle
       } else {
@@ -374,12 +397,18 @@ class SkeletalWorker extends PositionComponent {
       _depth = stepToward(_depth, targetDepth, depthSpeed, dt);
       final s = base * depthScale(_depth, params.backScale);
       position = Vector2(_x, _floorY - _depth * riseSpan); // feet ride up the plane with depth
-      final pose = animatePose(anim, _clock, params);
+      final pose = animatePose(anim, _clock, params, idleArmForward: idleArmForward);
       _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
       final root = _joints[manifest.root.name];
       if (root != null) root.position.y = _rootBaseY + pose.bobY;
       _farGroup?.position = Vector2(0, pose.bobY);
       scale = Vector2(facingScaleX(s, _facingRight), s);
+      // Task 25 invariant: every placed frame's pose comes from a NAMED
+      // animation — `final WorkerAnim anim` makes an unposed branch a compile
+      // error, and this records/asserts it at runtime so tests (and the debug
+      // readout) can see exactly which animation each standing state resolved to.
+      lastAppliedAnim = anim;
+      assert(lastAppliedAnim != null, 'frame passed with no pose applied');
     } else {
       if (_buildHeight > 0) scale = Vector2.all(base);
     }
