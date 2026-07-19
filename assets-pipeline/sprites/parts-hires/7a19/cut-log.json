@@ -1,4 +1,7 @@
 {
  "master": "master-clean",
- "overriddenParts": []
+ "overriddenParts": [
+  "leg-upper",
+  "leg-lower"
+ ]
 }
