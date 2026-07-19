@@ -75,7 +75,14 @@ class WorkOrderStatus {
   final WorkOrderPhase phase;
   final String? reason; // failure reason category, when phase == failed
   final int? turns;     // turn count, when phase == completed
-  const WorkOrderStatus({this.phase = WorkOrderPhase.idle, this.reason, this.turns});
+  // Task 23B: the job's completion report — the agent's final answer text,
+  // captured by the daemon (device-zone, capped at 16KB there). Before this,
+  // "give me an audit of root" completed into a toast with nothing to read.
+  final String? report;
+  // The job.completed eventId — keys the Haiku narration line used as the
+  // report's dry one-line summary header.
+  final String? completedEventId;
+  const WorkOrderStatus({this.phase = WorkOrderPhase.idle, this.reason, this.turns, this.report, this.completedEventId});
 }
 
 // --- Live workshop state fed by the WS channel ---
@@ -262,7 +269,12 @@ class WorkshopController extends Notifier<WorkshopState> {
         }
         break;
       case 'job.completed':
-        workOrder = WorkOrderStatus(phase: WorkOrderPhase.completed, turns: e.payload['turns'] as int?);
+        workOrder = WorkOrderStatus(
+          phase: WorkOrderPhase.completed,
+          turns: e.payload['turns'] as int?,
+          report: e.payload['report'] as String?,
+          completedEventId: e.eventId,
+        );
         break;
       case 'job.failed':
         workOrder = WorkOrderStatus(phase: WorkOrderPhase.failed, reason: e.payload['reason'] as String?);

@@ -133,6 +133,15 @@ double _sin(double x) => math.sin(x);
 const double _kneeLock = 0.0; // leg-lower — straight shin
 const double _elbowLock = 0.0; // arm-lower — straight forearm
 
+// Task 23A: at rest the arms must hang neutral-to-slightly-FORWARD, never behind
+// the back. The authored bind pose hangs the arm at/behind vertical on all three
+// personas, and idle previously applied NO shoulder angle — so idle read as
+// "arms rocking behind the back" on device (the torso micro-rock carried the
+// near arm with it). Negative = forward in the left-facing local frame (same
+// sign as the typing/coffee reaches). The breathing term stays smaller than the
+// bias, so the shoulder angle is negative at every phase (locked by test).
+const double _idleArmForward = -0.12;
+
 /// Compute the pose for [anim] at time [t] (seconds) with params [p]. The sprite
 /// is authored LEFT-FACING; facing is handled by a whole-sprite mirror at the
 /// root (see SkeletalWorker), so the angles here are always in the left-facing
@@ -141,9 +150,11 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p) {
   switch (anim) {
     case WorkerAnim.idle:
       final b = _sin(2 * math.pi * 0.25 * t); // ambient rate halved (19i)
+      final idleArm = _idleArmForward + 0.03 * b; // breathes, stays forward (23A)
       return Pose({
         'head': p.headBob * b * 0.5,
         'torso': 0.01 * b,
+        'arm-upper': idleArm, 'arm-upper-far': idleArm,
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'leg-lower': _kneeLock, 'leg-lower-far': _kneeLock,
       }, p.bob * 0.25 * b);

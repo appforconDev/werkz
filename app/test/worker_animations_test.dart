@@ -46,6 +46,20 @@ void main() {
     expect(scaled.h, const SkelParams().workerHeightPx);
   });
 
+  test('idle arms hang forward at EVERY phase — never behind the back (23A)', () {
+    // Device bug: idle set no shoulder angle, so arms rested at the authored
+    // bind pose (at/behind vertical on all three personas) and the torso rock
+    // read as "arms rocking behind the back". Locked: across a full idle cycle
+    // both shoulders stay strictly FORWARD (negative in the left-facing frame).
+    const p = SkelParams();
+    for (var t = 0.0; t <= 4.0; t += 0.1) {
+      final pose = animatePose(WorkerAnim.idle, t, p);
+      expect(pose.angles['arm-upper'], isNotNull);
+      expect(pose.angles['arm-upper']!, lessThan(0), reason: 'near arm behind the back at t=$t');
+      expect(pose.angles['arm-upper-far']!, lessThan(0), reason: 'far arm behind the back at t=$t');
+    }
+  });
+
   test('idle is calm (small angles), work-typing taps from the shoulder', () {
     const p = SkelParams();
     final idle = animatePose(WorkerAnim.idle, 0.3, p);

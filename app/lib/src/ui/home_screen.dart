@@ -15,6 +15,7 @@ import 'work_order_sheet.dart';
 import 'widgets/layout_tuning_panel.dart';
 import 'widgets/requisition_overlay.dart';
 import 'widgets/stacked_workshop.dart';
+import 'widgets/work_report_sheet.dart';
 
 // Ambient screen. Vertical layout: status bar → rooms edge-to-edge (below the
 // bar, clean to the bottom bar's edge) → a thin steel BOTTOM BAR that is the sole
@@ -142,6 +143,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _woDismiss?.cancel();
                   ref.read(workshopProvider.notifier).dismissWorkOrder();
                 },
+                // Task 23B: a completed order with a report opens it on tap (the
+                // banner then dismisses — the report stays reachable in the LOG).
+                onOpenReport: ws.workOrder.report == null
+                    ? null
+                    : () {
+                        _woDismiss?.cancel();
+                        final wo = ws.workOrder;
+                        ref.read(workshopProvider.notifier).dismissWorkOrder();
+                        showWorkReport(context,
+                            report: wo.report!,
+                            summary: ws.narration[wo.completedEventId],
+                            turns: wo.turns);
+                      },
               ),
             ),
           if (showOverlay)
@@ -331,15 +345,29 @@ class _IncidentLogPanel extends StatelessWidget {
                     controller: scrollController,
                     padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                     itemCount: lines.length,
-                    itemBuilder: (_, i) {
+                    itemBuilder: (context, i) {
                       final e = lines[i];
                       final narrated = narration[e.eventId];
+                      // Task 23B: a completed work order carrying a report opens
+                      // it on tap — the LOG is the durable way back to a report
+                      // after the toast has self-dismissed.
+                      final report = e.eventType == 'job.completed' ? e.payload['report'] as String? : null;
+                      final line = Text('• ${narrated ?? narrate(e)}${report != null ? '  ▸ REPORT' : ''}',
+                          style: TextStyle(
+                              fontFamily: Werkz.mono, fontSize: 12,
+                              fontWeight: report != null ? FontWeight.bold : FontWeight.normal,
+                              color: narrated != null ? Werkz.machine : Werkz.gunmetal));
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Text('• ${narrated ?? narrate(e)}',
-                            style: TextStyle(
-                                fontFamily: Werkz.mono, fontSize: 12,
-                                color: narrated != null ? Werkz.machine : Werkz.gunmetal)),
+                        child: report == null
+                            ? line
+                            : InkWell(
+                                onTap: () => showWorkReport(context,
+                                    report: report,
+                                    summary: narrated,
+                                    turns: e.payload['turns'] as int?),
+                                child: line,
+                              ),
                       );
                     },
                   ),
@@ -524,14 +552,20 @@ class _PreflightSheet extends StatelessWidget {
 class _WorkOrderStrip extends StatelessWidget {
   final WorkOrderStatus status;
   final VoidCallback onDismiss;
-  const _WorkOrderStrip({required this.status, required this.onDismiss});
+  // Task 23B: non-null when a completion report is attached — tap then OPENS the
+  // report instead of merely dismissing.
+  final VoidCallback? onOpenReport;
+  const _WorkOrderStrip({required this.status, required this.onDismiss, this.onOpenReport});
 
   @override
   Widget build(BuildContext context) {
+    final hasReport = status.phase == WorkOrderPhase.completed && onOpenReport != null;
     final (label, color, icon) = switch (status.phase) {
       WorkOrderPhase.inProgress => ('WORK ORDER — IN PROGRESS', Werkz.machine, Icons.autorenew),
       WorkOrderPhase.completed => (
-          'WORK ORDER — COMPLETED${status.turns != null ? ' (${status.turns} turns)' : ''}',
+          hasReport
+              ? 'WORK ORDER — COMPLETED · REPORT FILED'
+              : 'WORK ORDER — COMPLETED${status.turns != null ? ' (${status.turns} turns)' : ''}',
           Werkz.approvalGreen, Icons.check_circle),
       WorkOrderPhase.failed => (
           'WORK ORDER — FAILED${status.reason != null ? ' (${_reason(status.reason!)})' : ''}',
@@ -543,7 +577,7 @@ class _WorkOrderStrip extends StatelessWidget {
     return Material(
       color: color,
       child: InkWell(
-        onTap: dismissible ? onDismiss : null,
+        onTap: hasReport ? onOpenReport : (dismissible ? onDismiss : null),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           child: Row(children: [
@@ -553,7 +587,9 @@ class _WorkOrderStrip extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(fontFamily: Werkz.mono, color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
             ),
-            if (dismissible)
+            if (hasReport)
+              const Icon(Icons.description_outlined, color: Colors.white, size: 14)
+            else if (dismissible)
               const Icon(Icons.close, color: Colors.white70, size: 14),
           ]),
         ),

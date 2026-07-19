@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { WorkOrderManager } from './work-order.ts';
+import { WorkOrderManager, capReport, REPORT_CAP, REPORT_TRUNCATION_MARKER } from './work-order.ts';
 import { EventBus } from '../events/bus.ts';
 import type { WerkzEvent } from '../events/types.ts';
 
@@ -83,6 +83,41 @@ test('clean exit becomes job.completed with turns', async () => {
   assert.equal(p.ok, true);
   assert.equal(p.turns, 4);
   assert.equal(wo.busy, false);
+});
+
+test('completion captures the final assistant text as the report (23B)', async () => {
+  const { bus, events } = collect();
+  const wo = new WorkOrderManager(process.cwd(), 'proj', bus, () => {},
+    fakeClaude('echo \'{"num_turns":2,"result":"ROOT AUDIT: README.md, src/, docs/ — nothing unexpected."}\'\nexit 0'));
+  wo.dispatch('give me an audit of what is in root');
+  await once(bus, 'job.completed');
+  const done = events.find((e) => e.eventType === 'job.completed')!;
+  const p = done.payload as { ok?: boolean; turns?: number; report?: string };
+  assert.equal(p.ok, true);
+  assert.equal(p.turns, 2);
+  assert.equal(p.report, 'ROOT AUDIT: README.md, src/, docs/ — nothing unexpected.');
+  // Correlation: the report rides the SAME terminal event as the job's ok/turns
+  // (one job at a time in v1; the completed event IS the order's record).
+  assert.equal(events.filter((e) => e.eventType === 'job.completed').length, 1);
+});
+
+test('a resultless/plain-text output completes WITHOUT a report field (23B)', async () => {
+  const { bus, events } = collect();
+  const wo = new WorkOrderManager(process.cwd(), 'proj', bus, () => {},
+    fakeClaude('echo \'{"num_turns":1}\'\nexit 0'));
+  wo.dispatch('do the thing');
+  await once(bus, 'job.completed');
+  const p = events.find((e) => e.eventType === 'job.completed')!.payload as { report?: string };
+  assert.equal('report' in p, false, 'no empty report key when claude returned no text');
+});
+
+test('report is capped at 16KB with a LOUD truncation marker (23B)', () => {
+  const short = 'a'.repeat(100);
+  assert.equal(capReport(short), short); // under the cap → untouched
+  const long = 'b'.repeat(REPORT_CAP + 5000);
+  const capped = capReport(long);
+  assert.equal(capped.length, REPORT_CAP);
+  assert.ok(capped.endsWith(REPORT_TRUNCATION_MARKER), 'truncation must be loudly marked');
 });
 
 test('key status exposes last4 but never the whole key', async () => {

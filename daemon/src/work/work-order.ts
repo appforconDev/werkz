@@ -30,6 +30,19 @@ function gameSafeDetail(stderr: string): string {
   return line.length > DETAIL_CAP ? line.slice(0, DETAIL_CAP - 1) + '…' : line;
 }
 
+// Task 23B: the job's RESULT REPORT — the final assistant text from
+// `claude -p --output-format json` (its `result` field: the closing summary,
+// not the transcript). Device-zone like diffCore (§4.3): delivered to the phone
+// for the completion report view, never into narration facts (the Haiku
+// allowlist doesn't include it) and never onto a share surface. Capped so one
+// chatty job can't bloat the event log; truncation is LOUD, never silent.
+export const REPORT_CAP = 16 * 1024;
+export const REPORT_TRUNCATION_MARKER = '\n\n[— REPORT TRUNCATED AT 16KB — full output remains in the terminal —]';
+export function capReport(text: string): string {
+  if (text.length <= REPORT_CAP) return text;
+  return text.slice(0, REPORT_CAP - REPORT_TRUNCATION_MARKER.length) + REPORT_TRUNCATION_MARKER;
+}
+
 export class WorkOrderManager {
   #projectDir: string;
   #bus: EventBus;
@@ -102,12 +115,24 @@ export class WorkOrderManager {
     child.on('exit', (code) => {
       if (code === 0) {
         let turns: number | undefined;
-        try { turns = (JSON.parse(out) as { num_turns?: number }).num_turns; } catch { /* not json */ }
-        // Game-safe summary only — no raw result text crosses the boundary (§4.3).
+        let report: string | undefined;
+        try {
+          const parsed = JSON.parse(out) as { num_turns?: number; result?: string };
+          turns = parsed.num_turns;
+          // Task 23B: capture the final assistant text as the completion report
+          // (device-zone, see capReport) — before this, the answer to "give me
+          // an audit of root" lived only in the terminal and the phone got a
+          // toast with nothing to read.
+          if (typeof parsed.result === 'string' && parsed.result.trim()) {
+            report = capReport(parsed.result.trim());
+          }
+        } catch { /* not json */ }
         this.#settle('job.completed', 'info', {
-          source: 'work-order', ok: true, ...(turns !== undefined ? { turns } : {}),
+          source: 'work-order', ok: true,
+          ...(turns !== undefined ? { turns } : {}),
+          ...(report !== undefined ? { report } : {}),
         });
-        this.#log(`work order finished (exit 0)`);
+        this.#log(`work order finished (exit 0${report ? `, report ${report.length} chars` : ', no report text'})`);
       } else {
         this.#fail('nonzero-exit', gameSafeDetail(err) || `exited with code ${code ?? 'unknown'}`, code ?? undefined);
         this.#log(`work order FAILED (exit ${code ?? '?'})`);
