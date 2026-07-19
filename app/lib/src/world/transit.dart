@@ -41,9 +41,11 @@ class TransitParams {
 
 double transitBeat(TransitParams p, int distance) => p.beatSec * distance;
 
-/// Time to walk a fraction-of-width [fracDist] at the unified [walkSpeedPx].
-double _walkDur(double fracDist, double walkSpeedPx) =>
-    walkSpeedPx <= 0 ? 0 : (fracDist.abs() * kTransitBandWidth / walkSpeedPx);
+/// Time to walk a fraction-of-width [fracDist] at [speedPx]. The exit and enter
+/// legs take their OWN room's speed (task 20b-fix-4 walk-speed lens) — the change
+/// lands in the off-view beat, so there is no visible pop at the edge.
+double _walkDur(double fracDist, double speedPx) =>
+    speedPx <= 0 ? 0 : (fracDist.abs() * kTransitBandWidth / speedPx);
 
 /// One in-flight transit for a worker (visual state; the model already moved
 /// logically). [startXFrac] is where the worker stood when it began — it picks
@@ -64,15 +66,17 @@ class Transit {
   double get _entryX => edge == Edge.left ? 0.14 : 0.86; // a step inside the corresponding edge
 }
 
-/// The phase durations of a transit under the current params + walk speed.
-({double exit, double beat, double enter, double total}) _durs(Transit t, TransitParams p, double walkSpeedPx) {
-  final exit = _walkDur(t._pastX(p) - t.startXFrac, walkSpeedPx);
+/// The phase durations of a transit: the exit leg walks at [exitSpeed] (from-room
+/// lens), the enter leg at [enterSpeed] (to-room lens; defaults to exitSpeed).
+({double exit, double beat, double enter, double total}) _durs(Transit t, TransitParams p, double exitSpeed, double enterSpeed) {
+  final exit = _walkDur(t._pastX(p) - t.startXFrac, exitSpeed);
   final beat = transitBeat(p, t.distance);
-  final enter = _walkDur(t._entryX - t._pastX(p), walkSpeedPx);
+  final enter = _walkDur(t._entryX - t._pastX(p), enterSpeed);
   return (exit: exit, beat: beat, enter: enter, total: exit + beat + enter);
 }
 
-double transitTotal(Transit t, TransitParams p, double walkSpeedPx) => _durs(t, p, walkSpeedPx).total;
+double transitTotal(Transit t, TransitParams p, double exitSpeed, [double? enterSpeed]) =>
+    _durs(t, p, exitSpeed, enterSpeed ?? exitSpeed).total;
 
 /// What to draw for a transit at its current elapsed. [room] is which storey shows
 /// the worker (null during the off-view beat); [xFrac] + [facingRight] place it;
@@ -89,8 +93,8 @@ class TransitFrame {
 }
 
 /// A short render-state label for the debug worker table: phase + seconds left.
-String transitPhaseLabel(Transit t, TransitParams p, double walkSpeedPx) {
-  final d = _durs(t, p, walkSpeedPx);
+String transitPhaseLabel(Transit t, TransitParams p, double exitSpeed, [double? enterSpeed]) {
+  final d = _durs(t, p, exitSpeed, enterSpeed ?? exitSpeed);
   final e = t.elapsed;
   if (e < d.exit) return 'exit→${t.toRoom} ${(d.exit - e).toStringAsFixed(1)}s';
   if (e < d.exit + d.beat) return 'OFF-VIEW beat ${(d.exit + d.beat - e).toStringAsFixed(1)}s';
@@ -100,11 +104,11 @@ String transitPhaseLabel(Transit t, TransitParams p, double walkSpeedPx) {
 
 double _lerp(double a, double b, double t) => a + (b - a) * t;
 
-TransitFrame transitFrame(Transit t, TransitParams p, double walkSpeedPx) {
+TransitFrame transitFrame(Transit t, TransitParams p, double exitSpeed, [double? enterSpeed]) {
   final edge = t.edge;
   final pastX = t._pastX(p);
   final entryX = t._entryX;
-  final d = _durs(t, p, walkSpeedPx);
+  final d = _durs(t, p, exitSpeed, enterSpeed ?? exitSpeed);
   final e = t.elapsed;
   final progress = d.total <= 0 ? 1.0 : (e / d.total).clamp(0.0, 1.0);
 

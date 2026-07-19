@@ -56,3 +56,15 @@ class RoomScaleController extends Notifier<Map<String, double>> {
   double of(String room) => state[room] ?? 1.0;
   void set(String room, double v) => state = {...state, room: v};
 }
+
+// Per-room walk-speed lens (task 20b-fix-4), live-tunable next to the scale. It
+// multiplies the single walkSpeedPx source — a lens per room, not a new speed.
+final roomWalkSpeedProvider =
+    NotifierProvider<RoomWalkSpeedController, Map<String, double>>(RoomWalkSpeedController.new);
+
+class RoomWalkSpeedController extends Notifier<Map<String, double>> {
+  @override
+  Map<String, double> build() => {for (final e in kRooms.entries) e.key: e.value.walkSpeedFactor};
+  double of(String room) => state[room] ?? 1.0;
+  void set(String room, double v) => state = {...state, room: v};
+}

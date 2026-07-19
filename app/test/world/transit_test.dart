@@ -93,9 +93,22 @@ void main() {
 
   group('per-room scale + unified speed (task 20b-fix-2)', () {
     test('the registry scales the Advisor close-up up from the wide-shot baseline', () {
-      expect(roomDef('advisors-office')!.workerScaleFactor, 2.4);
+      expect(roomDef('advisors-office')!.workerScaleFactor, 1.9); // Rickard's 20b-fix-4 calibration
       expect(roomDef('workshop-floor')!.workerScaleFactor, 1.0);
       expect(roomDef('archive')!.workerScaleFactor, 1.0);
+    });
+
+    test('per-room walk-speed lens: Advisor feet are 15% faster; the enter leg takes it', () {
+      expect(roomDef('advisors-office')!.walkSpeedFactor, 1.15); // Rickard's 20b-fix-4 calibration
+      expect(roomDef('workshop-floor')!.walkSpeedFactor, 1.0);
+      expect(roomDef('archive')!.walkSpeedFactor, 1.0);
+      // A transit INTO the advisor room walks its enter leg 1.15× faster → shorter
+      // total than a uniform-speed transit (the lens blends per phase, no edge pop).
+      const p = TransitParams(beatSec: 0.6);
+      final t = Transit(fromRoom: 'workshop-floor', toRoom: 'advisors-office', startXFrac: 0.5);
+      final lensed = transitTotal(t, p, 100, 100 * 1.15); // enter at the advisor lens
+      final uniform = transitTotal(t, p, 100, 100);
+      expect(lensed, lessThan(uniform));
     });
 
     test('scale blends smoothly across a cross-room transit (no size pop at the edge)', () {

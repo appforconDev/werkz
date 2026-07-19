@@ -34,6 +34,13 @@ class _FastSkel extends SkelParamsController {
   SkelParams build() => const SkelParams(walkSpeedPx: _kTestSpeed);
 }
 
+// Uniform room speed so the provider's per-phase math matches roomsRendering's
+// single-speed helper (the per-room lens is exercised in transit_test).
+class _UniformWalk extends RoomWalkSpeedController {
+  @override
+  Map<String, double> build() => {for (final e in kRooms.entries) e.key: 1.0};
+}
+
 class _FakeModel extends WorkerModelController {
   @override
   WorkerModelState build() => WorkerModelState.initial(); // no workshop feed listen
@@ -62,6 +69,7 @@ void main() {
     final c = ProviderContainer(overrides: [
       workerModelProvider.overrideWith(_FakeModel.new),
       skelParamsProvider.overrideWith(_FastSkel.new),
+      roomWalkSpeedProvider.overrideWith(_UniformWalk.new),
       if (patrol) forcedSkelStateProvider.overrideWith(_Patrol.new),
     ]);
     addTearDown(c.dispose);

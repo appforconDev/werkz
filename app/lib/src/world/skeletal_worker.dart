@@ -126,6 +126,11 @@ class SkeletalWorker extends PositionComponent {
   /// the room registry (blended during a cross-room transit). Multiplies the height.
   double roomScale = 1.0;
 
+  /// Per-room walk-speed lens (task 20b-fix-4), set live by the mount. Multiplies
+  /// the single walkSpeedPx for THIS room's in-room walking (transit legs take
+  /// their own room's lens in the transit math).
+  double roomWalkSpeedFactor = 1.0;
+
   SkeletalWorker({
     required this.manifest,
     required this.imageFolder,
@@ -320,7 +325,7 @@ class SkeletalWorker extends PositionComponent {
         if (moveTarget != null) {
           moving = (moveTarget - _x).abs() > 0.5;
           if (moving) _facingRight = moveTarget > _x;
-          _x = stepToward(_x, moveTarget, params.walkSpeedPx, dt);
+          _x = stepToward(_x, moveTarget, params.walkSpeedPx * roomWalkSpeedFactor, dt);
           // walk-loop: on arrival, flip the patrol direction → carry on forever.
           if (!moving && forced == ForcedSkelState.walkLoop) _patrolRight = !_patrolRight;
         }

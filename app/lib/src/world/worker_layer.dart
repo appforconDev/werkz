@@ -29,7 +29,8 @@ class _Mount {
   final double? overrideXFrac;
   final bool facingRight;
   final double roomScale; // per-room camera scale (blended mid-transit)
-  const _Mount(this.persona, this.status, this.overrideXFrac, this.facingRight, this.roomScale);
+  final double roomWalkSpeedFactor; // per-room walk-speed lens
+  const _Mount(this.persona, this.status, this.overrideXFrac, this.facingRight, this.roomScale, this.roomWalkSpeedFactor);
 }
 
 double _lerp(double a, double b, double t) => a + (b - a) * t;
@@ -52,26 +53,32 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     final params = ref.watch(transitParamsProvider);
     final skel = ref.watch(skelParamsProvider);
     final roomScale = ref.watch(roomScaleProvider);
+    final roomWalk = ref.watch(roomWalkSpeedProvider);
     double scaleOf(String room) => roomScale[room] ?? 1.0;
+    double walkOf(String room) => roomWalk[room] ?? 1.0;
 
     // Resolve which workers are visible in THIS room this frame, at this room's
-    // camera scale (blended across a cross-room transit so there is no pop).
+    // camera scale (blended across a cross-room transit so there is no pop). The
+    // transit legs take each room's own walk-speed lens.
     final mounts = <_Mount>[];
     for (final w in model.workers) {
       final wt = transit[w.personaId];
       final active = wt?.active;
       if (active != null) {
-        final f = transitFrame(active, params, skel.walkSpeedPx);
+        final f = transitFrame(active, params,
+            skel.walkSpeedPx * walkOf(active.fromRoom), skel.walkSpeedPx * walkOf(active.toRoom));
         if (f.room == widget.room) {
           final blend = _lerp(scaleOf(active.fromRoom), scaleOf(active.toRoom), f.progress);
           mounts.add(f.done
-              ? _Mount(w.personaId, w.status, null, false, blend) // arrived — hand back to locomotion
-              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend));
+              ? _Mount(w.personaId, w.status, null, false, blend, walkOf(widget.room)) // arrived — hand back to locomotion
+              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend, walkOf(widget.room)));
         }
         // f.room == null → off-view beat → not in any room
       } else {
         final visualRoom = wt?.visualRoom ?? w.currentRoom;
-        if (visualRoom == widget.room) mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room)));
+        if (visualRoom == widget.room) {
+          mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room), walkOf(widget.room)));
+        }
       }
     }
 
@@ -169,6 +176,7 @@ class _WorkerGame extends FlameGame {
         w.state = workerStateForStatus(m.status);
       }
       w.roomScale = m.roomScale; // per-room camera scale (blended mid-transit)
+      w.roomWalkSpeedFactor = m.roomWalkSpeedFactor; // per-room walk-speed lens
       w.setTransitOverride(m.overrideXFrac, facingRight: m.facingRight);
     }
     _pushViewport();
