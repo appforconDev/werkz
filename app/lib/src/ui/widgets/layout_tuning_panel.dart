@@ -215,6 +215,9 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('worker height', sp.workerHeightPx, 50, 300, (v) => spc.update(sp.copyWith(workerHeightPx: v)), decimals: 0),
       _slider('worker x', sp.workerX, 0, 1, (v) => spc.update(sp.copyWith(workerX: v)), decimals: 2),
       _slider('walk hz', sp.walkHz, 0.3, 3, (v) => spc.update(sp.copyWith(walkHz: v))),
+      // Task 28: dispatch urgency — errand walks/transits run at this multiple
+      // of the ONE walk speed (composes with the room lens; cadence follows).
+      _slider('dispatch speed×', sp.dispatchSpeedFactor, 1.0, 2.0, (v) => spc.update(sp.copyWith(dispatchSpeedFactor: v))),
       _slider('walk speed', sp.walkSpeedPx, 0, 120, (v) => spc.update(sp.copyWith(walkSpeedPx: v)), decimals: 0),
       _slider('leg swing', sp.legSwing, 0, 1.2, (v) => spc.update(sp.copyWith(legSwing: v)), decimals: 2),
       _slider('arm swing', sp.armSwing, 0, 1.2, (v) => spc.update(sp.copyWith(armSwing: v)), decimals: 2),

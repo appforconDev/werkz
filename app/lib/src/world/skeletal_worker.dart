@@ -144,6 +144,12 @@ class SkeletalWorker extends PositionComponent {
   /// their own room's lens in the transit math).
   double roomWalkSpeedFactor = 1.0;
 
+  /// Task 28: the mount sets this when the worker has an ACTIVE JOB (model
+  /// jobId) — errand movement runs at params.dispatchSpeedFactor through the
+  /// single speed source; ambient movement (wander, return-home, patrol) never
+  /// gets it (the wander branch reads the base speed regardless).
+  bool onErrand = false;
+
   /// Per-persona idle shoulder bias (task 25): the authored bind pose hangs each
   /// persona's arm behind vertical by a different amount, so the "arms never
   /// behind the back" rule takes a per-persona forward bias (personaSpec).
@@ -325,7 +331,13 @@ class SkeletalWorker extends PositionComponent {
     final base = _buildHeight > 0 ? params.workerHeightPx * heightScale * roomScale / _buildHeight : 1.0;
     if (_placed) {
       final home = _gameWidth * (homeXFrac ?? params.workerX);
+      // Task 28: the ONE speed source through its lenses. walkPx (base × room)
+      // drives AMBIENT movement (wander); errand movement multiplies in the
+      // dispatch urgency. `urgent` marks the frames whose motion ran at the
+      // errand pace so the walk cadence matches (no foot-slide).
       final walkPx = params.walkSpeedPx * roomWalkSpeedFactor;
+      final errandPx = effectiveWalkSpeed(params, roomWalkSpeedFactor, onErrand: onErrand);
+      var urgent = false;
       final riseSpan = _floorY * kDepthRiseFrac; // px the feet rise front→back
       final depthSpeed = riseSpan <= 0 ? 1.0 : walkPx / riseSpan; // depth units/s ≈ walkPx on screen
 
@@ -337,6 +349,7 @@ class SkeletalWorker extends PositionComponent {
         _depth = 0; // transit runs on the front plane
         _wander = const Wander();
         anim = WorkerAnim.walk;
+        urgent = onErrand; // a job-route transit leg walks at the errand cadence
       } else if (((forced == ForcedSkelState.auto && state == WorkerState.idle) || forced == ForcedSkelState.wander) &&
           pois.isNotEmpty) {
         // Idle wander: drift to a random in-room POI, dwell, return, repeat.
@@ -391,7 +404,11 @@ class SkeletalWorker extends PositionComponent {
         if (moveTarget != null) {
           moving = (moveTarget - _x).abs() > 0.5;
           if (moving) _facingRight = moveTarget > _x;
-          _x = stepToward(_x, moveTarget, walkPx, dt);
+          // State walks (to the work site etc.) run at the errand pace when a
+          // job is active; forced/ambient walks read the base (errandPx == walkPx
+          // when onErrand is false — patrol/idle mounts never set it).
+          _x = stepToward(_x, moveTarget, errandPx, dt);
+          urgent = moving && onErrand;
           if (!moving && forced == ForcedSkelState.walkLoop) _patrolRight = !_patrolRight;
         }
         final carrying = animState == WorkerState.carrying;
@@ -403,7 +420,11 @@ class SkeletalWorker extends PositionComponent {
       _depth = stepToward(_depth, targetDepth, depthSpeed, dt);
       final s = base * depthScale(_depth, params.backScale);
       position = Vector2(_x, _floorY - _depth * riseSpan); // feet ride up the plane with depth
-      final pose = animatePose(anim, _clock, params, idleArmForward: idleArmForward);
+      // Cadence matches the pace that actually moved the feet this frame: the
+      // stride (speed/cadence) is invariant under urgency, so no foot-slide.
+      final poseParams =
+          urgent ? params.copyWith(walkHz: effectiveWalkHz(params, onErrand: true)) : params;
+      final pose = animatePose(anim, _clock, poseParams, idleArmForward: idleArmForward);
       _joints.forEach((name, comp) => comp.angle = pose.angles[name] ?? 0);
       final root = _joints[manifest.root.name];
       if (root != null) root.position.y = _rootBaseY + pose.bobY;

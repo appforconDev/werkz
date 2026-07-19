@@ -60,6 +60,12 @@ class SkelParams {
   final double backScale;
   final double wanderEverySec;
   final double dwellSec;
+  // Dispatch urgency (task 28, Rickard's number): a worker ON AN ERRAND (active
+  // job — walk to site, job-route transit legs) moves at this multiple of the
+  // single walkSpeedPx source. A LENS like the room factor — multipliers
+  // compose (base × room × urgency); ambient movement (wander, return-home,
+  // patrol) stays 1.0. Cadence scales with it so the feet don't slide.
+  final double dispatchSpeedFactor;
 
   const SkelParams({
     // Rickard's device-tuned values (task 20b-fix-2). Global height is the WIDE-shot
@@ -78,6 +84,7 @@ class SkelParams {
     this.backScale = 0.78, // back-of-room scale (task 20c)
     this.wanderEverySec = 40, // → a lazy ~20–60 s random rest interval
     this.dwellSec = 4,
+    this.dispatchSpeedFactor = 1.20, // task 28: Rickard's urgency multiple
   });
 
   double get wanderMinSec => wanderEverySec * 0.5;
@@ -96,7 +103,8 @@ class SkelParams {
           double? walkSpeedPx,
           double? backScale,
           double? wanderEverySec,
-          double? dwellSec}) =>
+          double? dwellSec,
+          double? dispatchSpeedFactor}) =>
       SkelParams(
         walkHz: walkHz ?? this.walkHz,
         legSwing: legSwing ?? this.legSwing,
@@ -111,8 +119,21 @@ class SkelParams {
         backScale: backScale ?? this.backScale,
         wanderEverySec: wanderEverySec ?? this.wanderEverySec,
         dwellSec: dwellSec ?? this.dwellSec,
+        dispatchSpeedFactor: dispatchSpeedFactor ?? this.dispatchSpeedFactor,
       );
 }
+
+/// Task 28 — the ONE walk-speed composition (pure, unit-tested): the single
+/// walkSpeedPx source through its lenses. Room factor is the camera-distance
+/// lens (20b-fix-4); urgency applies ONLY on an errand (active job): base ×
+/// room × urgency. No other speed constants exist.
+double effectiveWalkSpeed(SkelParams p, double roomFactor, {required bool onErrand}) =>
+    p.walkSpeedPx * roomFactor * (onErrand ? p.dispatchSpeedFactor : 1.0);
+
+/// The cadence that matches [effectiveWalkSpeed] so the feet don't slide at the
+/// faster pace: stride length (speed/cadence) is invariant under urgency.
+double effectiveWalkHz(SkelParams p, {required bool onErrand}) =>
+    p.walkHz * (onErrand ? p.dispatchSpeedFactor : 1.0);
 
 /// One frame of the rig: per-part joint angles (radians) + a whole-body vertical
 /// bob. Parts absent from a persona's rig are simply not in the map.
@@ -155,7 +176,9 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p,
   switch (anim) {
     case WorkerAnim.idle:
       final b = _sin(2 * math.pi * 0.25 * t); // ambient rate halved (19i)
-      final idleArm = idleArmForward + 0.03 * b; // breathes, stays forward (23A/25)
+      // Task 28 (Rickard's call): idle arms do NOT swing — they HOLD the
+      // forward bias; the life comes from the head bob + torso rock + body bob.
+      final idleArm = idleArmForward;
       return Pose({
         'head': p.headBob * b * 0.5,
         'torso': 0.01 * b,

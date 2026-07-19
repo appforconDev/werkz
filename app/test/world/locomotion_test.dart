@@ -3,6 +3,7 @@
 // programmatically checkable: facing flip, target arrival (no foot-slide past),
 // and contralateral (counter-phase) arm/leg coordination with locked joints.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:werkz_app/src/world/rig_manifest.dart';
 import 'package:werkz_app/src/world/skeletal_worker.dart';
 import 'package:werkz_app/src/world/worker_animations.dart';
 import 'package:werkz_app/src/world/worker_sprite.dart';
@@ -76,6 +77,60 @@ void main() {
       expect(typing.angles['arm-upper']!.abs(), greaterThan(0.01));
     });
 
+    test('dispatch urgency composes through the ONE speed source (task 28)', () {
+      const p = SkelParams();
+      // Errand: base × room × urgency. Ambient: base × room only.
+      expect(effectiveWalkSpeed(p, 1.0, onErrand: true), closeTo(13 * 1.20, 1e-9));
+      expect(effectiveWalkSpeed(p, 1.0, onErrand: false), 13);
+      expect(effectiveWalkSpeed(p, 1.15, onErrand: true), closeTo(13 * 1.15 * 1.20, 1e-9),
+          reason: 'urgency composes with the room lens (advisor 1.15)');
+      expect(effectiveWalkSpeed(p, 1.15, onErrand: false), closeTo(13 * 1.15, 1e-9));
+
+      // Slide-free: the stride (speed/cadence) is invariant under urgency.
+      final strideAmbient = effectiveWalkSpeed(p, 1.0, onErrand: false) / p.walkHz;
+      final strideErrand =
+          effectiveWalkSpeed(p, 1.0, onErrand: true) / effectiveWalkHz(p, onErrand: true);
+      expect(strideErrand, closeTo(strideAmbient, 1e-9),
+          reason: 'cadence scales with urgency so the feet do not slide');
+    });
+
+    test('an errand walk covers 1.20× the ground of an ambient walk (task 28)', () {
+      SkeletalWorker build() {
+        final m = RigManifest.fromJson({
+          'persona': 'X',
+          'parts': [
+            {'name': 'torso', 'masterRegion': {'x0': 0, 'y0': 0, 'x1': 1, 'y1': 1}, 'pivot': {'x': .5, 'y': .5}, 'z': 0, 'attachParent': null},
+          ],
+        });
+        return SkeletalWorker(manifest: m, imageFolder: 'x', loadSprite: (_) async => null)
+          ..setViewport(800, 500) // plants at home x=400
+          ..state = WorkerState.walking; // job walk toward the site (x=256)
+      }
+
+      final ambient = build();
+      final errand = build()..onErrand = true;
+      for (var i = 0; i < 60; i++) {
+        ambient.update(1 / 60);
+        errand.update(1 / 60);
+      }
+      final ambientDist = 400 - ambient.position.x;
+      final errandDist = 400 - errand.position.x;
+      expect(ambientDist, greaterThan(5), reason: 'sanity: the ambient worker walked');
+      expect(errandDist / ambientDist, closeTo(1.20, 0.02),
+          reason: 'errand pace = dispatchSpeedFactor over the same second');
+    });
+
+    test('idle arms HOLD the forward bias — no swing (task 28, Rickard)', () {
+      const p = SkelParams();
+      final a = animatePose(WorkerAnim.idle, 0.0, p).angles['arm-upper']!;
+      for (var t = 0.0; t <= 4.0; t += 0.25) {
+        final pose = animatePose(WorkerAnim.idle, t, p);
+        expect(pose.angles['arm-upper']!, a, reason: 'near arm must not oscillate (t=$t)');
+        expect(pose.angles['arm-upper-far']!, a, reason: 'far arm must not oscillate (t=$t)');
+      }
+      expect(a, lessThan(0), reason: 'held FORWARD of the bind hang');
+    });
+
     test('tuned defaults (20b-fix-2 device pass)', () {
       expect(p.walkHz, 0.5);
       expect(p.typeHz, 1.7);
@@ -90,6 +145,7 @@ void main() {
       expect(p.dwellSec, 4);
       expect(p.wanderMinSec, 20); // derived range
       expect(p.wanderMaxSec, 60);
+      expect(p.dispatchSpeedFactor, 1.20); // task 28: Rickard's errand-urgency multiple
       // sanity: a full walk cycle is ~2s at the slower cadence
       expect(1 / p.walkHz, closeTo(2.0, 1e-9));
     });

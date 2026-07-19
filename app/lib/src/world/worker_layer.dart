@@ -32,7 +32,9 @@ class _Mount {
   final bool facingRight;
   final double roomScale; // per-room camera scale (blended mid-transit)
   final double roomWalkSpeedFactor; // per-room walk-speed lens
-  const _Mount(this.persona, this.status, this.overrideXFrac, this.facingRight, this.roomScale, this.roomWalkSpeedFactor);
+  final bool onErrand; // task 28: active job → dispatch-urgency pace
+  const _Mount(this.persona, this.status, this.overrideXFrac, this.facingRight, this.roomScale, this.roomWalkSpeedFactor,
+      this.onErrand);
 }
 
 double _lerp(double a, double b, double t) => a + (b - a) * t;
@@ -66,20 +68,25 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     for (final w in model.workers) {
       final wt = transit[w.personaId];
       final active = wt?.active;
+      // Task 28: an ACTIVE JOB puts the worker on an errand — its walks (and
+      // job-route transit legs) run at the dispatch-urgency pace. Ambient
+      // movement (wander / return-home / patrol) has no jobId → base pace.
+      final urgency = w.jobId != null ? skel.dispatchSpeedFactor : 1.0;
       if (active != null) {
         final f = transitFrame(active, params,
-            skel.walkSpeedPx * walkOf(active.fromRoom), skel.walkSpeedPx * walkOf(active.toRoom));
+            skel.walkSpeedPx * walkOf(active.fromRoom) * urgency,
+            skel.walkSpeedPx * walkOf(active.toRoom) * urgency);
         if (f.room == widget.room) {
           final blend = _lerp(scaleOf(active.fromRoom), scaleOf(active.toRoom), f.progress);
           mounts.add(f.done
-              ? _Mount(w.personaId, w.status, null, false, blend, walkOf(widget.room)) // arrived — hand back to locomotion
-              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend, walkOf(widget.room)));
+              ? _Mount(w.personaId, w.status, null, false, blend, walkOf(widget.room), w.jobId != null) // arrived — hand back to locomotion
+              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend, walkOf(widget.room), w.jobId != null));
         }
         // f.room == null → off-view beat → not in any room
       } else {
         final visualRoom = wt?.visualRoom ?? w.currentRoom;
         if (visualRoom == widget.room) {
-          mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room), walkOf(widget.room)));
+          mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room), walkOf(widget.room), w.jobId != null));
         }
       }
     }
@@ -228,6 +235,7 @@ class _WorkerGame extends FlameGame {
       }
       w.roomScale = m.roomScale; // per-room camera scale (blended mid-transit)
       w.roomWalkSpeedFactor = m.roomWalkSpeedFactor; // per-room walk-speed lens
+      w.onErrand = m.onErrand; // task 28: dispatch-urgency pace on an active job
       w.pois = poisForRoom(room); // idle-wander points of interest (task 20c)
       w.setTransitOverride(m.overrideXFrac, facingRight: m.facingRight);
     }
