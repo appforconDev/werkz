@@ -39,12 +39,18 @@ export interface ServerDeps {
   onReissuePairing?: () => void; // reprint the QR after a fresh token is issued
   onWorkOrder?: (directive: string) => { ok: boolean; error?: string };
   onApproveFiling?: () => { ok: boolean; error?: string }; // Form 22-C commit+push (task 38)
+  // Advisor Consultation (task 39) — plan-mode chat before dispatch.
+  onConsultStart?: () => { sessionId: string };
+  onConsultSend?: (sessionId: string, message: string) => Promise<{ ok: boolean; reply?: string; error?: string }>;
+  onConsultGet?: (sessionId: string) => { id: string; messages: unknown[] } | null;
+  onConsultEnd?: (sessionId: string) => void;
   getPreflight?: () => Preflight; // startup diagnostics, exposed to the phone (task 13 B)
   log?: (msg: string) => void;
 }
 
 export function createDaemonServer({
-  service, pairing, devMode, onReissuePairing, onWorkOrder, onApproveFiling, getPreflight, log = () => {},
+  service, pairing, devMode, onReissuePairing, onWorkOrder, onApproveFiling,
+  onConsultStart, onConsultSend, onConsultGet, onConsultEnd, getPreflight, log = () => {},
 }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -109,7 +115,8 @@ export function createDaemonServer({
 
     // --- Phone-facing (require session token) ---
     const phonePaths = new Set(['/pending', '/status', '/release', '/unpair', '/work-order', '/filing/approve', '/preflight']);
-    if (phonePaths.has(path)) {
+    const isConsult = path === '/consult/start' || path === '/consult/message' || path === '/consult/end' || path.startsWith('/consult/get');
+    if (phonePaths.has(path) || isConsult) {
       const token = tokenFrom(req, url);
       if (!pairing.verify(token)) return json(res, 401, { error: 'unpaired — POST /pair first' });
 
@@ -159,6 +166,28 @@ export function createDaemonServer({
       if (req.method === 'POST' && path === '/filing/approve') {
         const result = onApproveFiling?.() ?? { ok: false, error: 'no filing available' };
         return json(res, result.ok ? 200 : 409, result);
+      }
+      // Advisor Consultation (task 39) — plan-mode chat. Zero keys; the daemon
+      // spawns the user's own claude in --permission-mode plan (read+reason only).
+      if (req.method === 'POST' && path === '/consult/start') {
+        return json(res, 200, onConsultStart?.() ?? { error: 'consultation unavailable' });
+      }
+      if (req.method === 'POST' && path === '/consult/message') {
+        const body = safeParse(await readBody(req));
+        const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+        const msg = typeof body.message === 'string' ? body.message : '';
+        const result = (await onConsultSend?.(sessionId, msg)) ?? { ok: false, error: 'consultation unavailable' };
+        return json(res, result.ok ? 200 : 409, result);
+      }
+      if (req.method === 'GET' && path.startsWith('/consult/get')) {
+        const id = url.searchParams.get('id') ?? '';
+        const s = onConsultGet?.(id) ?? null;
+        return json(res, s ? 200 : 404, s ?? { error: 'consultation not found' });
+      }
+      if (req.method === 'POST' && path === '/consult/end') {
+        const body = safeParse(await readBody(req));
+        onConsultEnd?.(typeof body.sessionId === 'string' ? body.sessionId : '');
+        return json(res, 200, { ok: true });
       }
     }
 

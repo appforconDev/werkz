@@ -28,6 +28,7 @@ import { WorkOrderManager } from './work/work-order.ts';
 import { runPreflight, type Preflight } from './preflight/index.ts';
 import { readUserConfig, patchUserConfig } from './state/user-config.ts';
 import { ensureStateDir } from './state/state-dir.ts';
+import { ConsultationManager } from './consult/consultation.ts';
 import { resolveClaudePath } from './util/claude-path.ts';
 import { keepAwake } from './util/caffeinate.ts';
 
@@ -147,6 +148,13 @@ const workOrders = new WorkOrderManager(
   projectDir, identity.projectId, bus, (m) => console.log(`  · ${m}`), preflight.claudePath,
 );
 
+// Advisor Consultation (task 39): plan-mode chat before dispatch. Sessions
+// persist in .werkz/ (self-ignoring, task 37 A). Zero keys — user's own claude.
+const consult = new ConsultationManager(projectDir, preflight.claudePath, {
+  statePath: join(stateDir, 'consultations.json'),
+  log: (m) => console.log(`  · ${m}`),
+});
+
 function persistPairingToken(): void {
   // 0600 — the pairing token is a credential (task 37 A).
   try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken, { mode: 0o600 }); } catch { /* best effort */ }
@@ -167,6 +175,10 @@ const server = createDaemonServer({
   onReissuePairing: reissuePairing,
   onWorkOrder: (directive) => workOrders.dispatch(directive),
   onApproveFiling: () => workOrders.approveFiling(), // Form 22-C commit+push (task 38)
+  onConsultStart: () => consult.start(),
+  onConsultSend: (id, msg) => consult.send(id, msg),
+  onConsultGet: (id) => consult.get(id),
+  onConsultEnd: (id) => consult.end(id),
   getPreflight,
   log: (m) => console.log(`  · ${m}`),
 });
