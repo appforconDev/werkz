@@ -12,6 +12,7 @@ import '../state/worker_model_provider.dart';
 import '../state/layout_tuning.dart';
 import '../state/narration.dart';
 import 'theme.dart';
+import 'advisor_consult_screen.dart';
 import 'pairing_screen.dart';
 import 'settings_screen.dart';
 import 'work_order_sheet.dart';
@@ -172,6 +173,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   // When the debug tuning panel is open, give the stack head/foot
                   // scroll room so a docked panel can never hide a seam (task 17b).
                   scrollPadding: tuningVisible ? 340 : 0,
+                  // Task 39: tap the Advisor storey → the consultation planning UI.
+                  onOpenAdvisor: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdvisorConsultScreen()),
+                  ),
                 ),
               ),
               _BottomBar(

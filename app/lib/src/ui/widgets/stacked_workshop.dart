@@ -31,7 +31,9 @@ import '../theme.dart';
 class StackedWorkshop extends ConsumerWidget {
   final String activeRoom;
   final double scrollPadding;
-  const StackedWorkshop({super.key, required this.activeRoom, this.scrollPadding = 0});
+  // Task 39: tapping the Advisor (penthouse) storey opens the consultation.
+  final VoidCallback? onOpenAdvisor;
+  const StackedWorkshop({super.key, required this.activeRoom, this.scrollPadding = 0, this.onOpenAdvisor});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -71,6 +73,22 @@ class StackedWorkshop extends ConsumerWidget {
                   SizedBox(
                     height: heightFor(order[i].$6),
                     child: () {
+                      final isAdvisor = order[i].$1 == 'advisors-office';
+                      Widget wrapTap(Widget w) => isAdvisor && onOpenAdvisor != null
+                          ? Stack(children: [
+                              Positioned.fill(child: w),
+                              Positioned.fill(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(onTap: onOpenAdvisor),
+                                ),
+                              ),
+                              const Positioned(
+                                right: 6, top: 6,
+                                child: _ConsultChip(),
+                              ),
+                            ])
+                          : w;
                       final panel = _RoomPanel(
                         asset: order[i].$2, label: order[i].$3,
                         active: order[i].$1 == activeRoom,
@@ -79,9 +97,9 @@ class StackedWorkshop extends ConsumerWidget {
                       // Each storey hosts the workers whose currentRoom is this
                       // room (task 20a) — feet on the floor band a touch above
                       // the seam. A worker teleports between rooms until 20b.
-                      if (!showWorker) return panel;
+                      if (!showWorker) return wrapTap(panel);
                       final rd = roomDef(order[i].$1); // band geometry from the room registry (task 20b)
-                      return Stack(children: [
+                      return wrapTap(Stack(children: [
                         Positioned.fill(child: panel),
                         Positioned(
                           left: 0,
@@ -90,7 +108,7 @@ class StackedWorkshop extends ConsumerWidget {
                           height: rd?.bandHeight ?? 160,
                           child: WorkerLayer(room: order[i].$1),
                         ),
-                      ]);
+                      ]));
                     }(),
                   ),
                 ],
@@ -137,6 +155,23 @@ class _TransitClockState extends ConsumerState<_TransitClock> with SingleTickerP
 }
 
 // A uniform steel floor slab between storeys (task 15 C3).
+// Task 39: a small affordance on the Advisor storey inviting a consultation.
+class _ConsultChip extends StatelessWidget {
+  const _ConsultChip();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(color: Werkz.machine.withValues(alpha: 0.88), border: Border.all(color: Werkz.steel, width: 0.5)),
+      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.forum_outlined, size: 11, color: Werkz.cream),
+        SizedBox(width: 4),
+        Text('CONSULT', style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, letterSpacing: 1, color: Werkz.cream)),
+      ]),
+    );
+  }
+}
+
 class _FloorSlab extends StatelessWidget {
   final double height;
   const _FloorSlab({required this.height});

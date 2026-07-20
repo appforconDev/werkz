@@ -188,6 +188,41 @@ class DaemonClient {
     }
   }
 
+  // Advisor Consultation (task 39). Zero keys — the daemon spawns the user's own
+  // claude in plan mode. Test seams override the network in widget tests.
+  static Future<(String?, String?)> Function()? consultStartOverride;
+  static Future<(String?, String?)> Function(String, String)? consultSendOverride;
+
+  /// Start a consultation → (sessionId, error?).
+  Future<(String?, String?)> consultStart() async {
+    if (consultStartOverride != null) return consultStartOverride!();
+    try {
+      final res = await http.post(Uri.parse('${payload.httpBase}/consult/start'), headers: _authHeaders);
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode == 200 && j['sessionId'] != null) return (j['sessionId'] as String, null);
+      return (null, j['error'] as String? ?? 'consultation unavailable');
+    } catch (_) {
+      return (null, 'Advisor unavailable — the workshop is offline.');
+    }
+  }
+
+  /// Send a consultation message → (advisor reply, error?). The reply may take a
+  /// while (plan-mode reasoning); the error is the loud-but-kind Advisor message.
+  Future<(String?, String?)> consultSend(String sessionId, String message) async {
+    if (consultSendOverride != null) return consultSendOverride!(sessionId, message);
+    try {
+      final res = await http
+          .post(Uri.parse('${payload.httpBase}/consult/message'),
+              headers: _authHeaders, body: jsonEncode({'sessionId': sessionId, 'message': message}))
+          .timeout(const Duration(seconds: 130));
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode == 200 && j['ok'] == true) return (j['reply'] as String?, null);
+      return (null, j['error'] as String? ?? 'The Advisor could not respond.');
+    } catch (_) {
+      return (null, 'Advisor unavailable — the workshop is offline or slow.');
+    }
+  }
+
   /// File a work order — one directive → one headless job. Returns (ok, error?).
   Future<(bool, String?)> fileWorkOrder(String directive) async {
     try {

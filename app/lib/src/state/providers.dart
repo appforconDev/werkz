@@ -208,6 +208,8 @@ final workshopProvider =
 
 class WorkshopController extends Notifier<WorkshopState> {
   DaemonClient? _client;
+  /// The live daemon client (task 39: the consultation controller reuses it).
+  DaemonClient? get client => _client;
   bool _disposed = false;
   _AppLifecycle? _lifecycle;
   static const _feedCap = 200;

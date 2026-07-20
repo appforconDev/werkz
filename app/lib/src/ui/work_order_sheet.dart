@@ -6,23 +6,27 @@ import 'theme.dart';
 // Form 17-B — REQUEST FOR AGENT DISPATCH (task 11 C). One directive → one
 // headless job. No conversation in-app; that's the terminal's/Anthropic's
 // domain. Runs on the user's own key/subscription.
-Future<void> showWorkOrderSheet(BuildContext context) {
+// [initialDirective] pre-fills the field — the consult→dispatch bridge (task 39 C)
+// hands the Advisor's plan straight in, no re-typing. Dispatch still goes through
+// the normal job assignment + trust routing (no shortcut past the requisitions).
+Future<void> showWorkOrderSheet(BuildContext context, {String? initialDirective}) {
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Werkz.cream,
-    builder: (_) => const _WorkOrderSheet(),
+    builder: (_) => _WorkOrderSheet(initialDirective: initialDirective),
   );
 }
 
 class _WorkOrderSheet extends ConsumerStatefulWidget {
-  const _WorkOrderSheet();
+  final String? initialDirective;
+  const _WorkOrderSheet({this.initialDirective});
   @override
   ConsumerState<_WorkOrderSheet> createState() => _WorkOrderSheetState();
 }
 
 class _WorkOrderSheetState extends ConsumerState<_WorkOrderSheet> {
-  final _ctrl = TextEditingController();
+  late final _ctrl = TextEditingController(text: widget.initialDirective ?? '');
   bool _busy = false;
   String? _error;
 
