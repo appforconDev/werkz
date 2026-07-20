@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:werkz_app/src/world/rig_manifest.dart';
 import 'package:werkz_app/src/world/room_registry.dart';
 import 'package:werkz_app/src/world/skeletal_worker.dart';
-import 'package:werkz_app/src/world/worker_animations.dart';
 import 'package:werkz_app/src/world/worker_sprite.dart';
 
 SkeletalWorker _worker() {

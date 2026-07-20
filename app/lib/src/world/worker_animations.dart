@@ -91,9 +91,9 @@ class SkelParams {
     this.armSwing = 0.41,
     this.bob = 3,
     this.headBob = 0.06,
-    this.typeHz = 1.7,
-    this.typeSwing = 0.42,
-    this.typeReach = 1.2, // task 32 A: near-horizontal forward reach (0.5 read as diagonal-DOWN; the render sweep shows horizontal needs a HIGHER angle, not lower)
+    this.typeHz = 2.0, // Rickard device-tuned (task 33)
+    this.typeSwing = 0.25, // Rickard device-tuned (task 33)
+    this.typeReach = 1.25, // Rickard device-tuned (task 33; near-horizontal — the render sweep showed horizontal needs a HIGHER angle, not lower)
     this.workerHeightPx = 80, // Rickard's tuned wide-shot value; Advisor scales up ×2.4 per-room
     this.workerX = 0.5,
     this.walkSpeedPx = 13, // the ONE walk speed — every walking state reads this

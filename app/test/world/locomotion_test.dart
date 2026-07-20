@@ -135,14 +135,14 @@ void main() {
 
     test('tuned defaults (20b-fix-2 device pass)', () {
       expect(p.walkHz, 0.5);
-      expect(p.typeHz, 1.7);
+      expect(p.typeHz, 2.0); // task 33: Rickard device-tuned
       expect(p.workerHeightPx, 80); // Rickard's tuned wide-shot value (Advisor scales up per-room)
       expect(p.walkSpeedPx, 13); // 20b-fix-2: the one unified walk speed
       expect(p.legSwing, 0.36);
       expect(p.armSwing, 0.41);
       expect(p.bob, 3);
-      expect(p.typeSwing, 0.42);
-      expect(p.typeReach, 1.2); // task 32 A: near-horizontal forward typing reach
+      expect(p.typeSwing, 0.25); // task 33: Rickard device-tuned
+      expect(p.typeReach, 1.25); // task 33: Rickard device-tuned (near-horizontal)
       expect(p.backScale, 0.78); // 20c perspective-plane back-line scale
       expect(p.wanderEverySec, 40); // 20c: lazy ~20–60s wander interval
       expect(p.dwellSec, 4);

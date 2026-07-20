@@ -119,7 +119,9 @@ void main() {
     // shoulder (arm-upper), so that's what must oscillate.
     final t1 = animatePose(WorkerAnim.workTyping, 0.0, p);
     final t2 = animatePose(WorkerAnim.workTyping, 1 / (4 * p.typeHz), p); // quarter → tap extreme
-    expect((t1.angles['arm-upper']! - t2.angles['arm-upper']!).abs(), greaterThan(0.05),
+    // The tap oscillates (amplitude follows Rickard's tuned typeSwing 0.25 → a
+    // small but non-zero shoulder tap, task 33).
+    expect((t1.angles['arm-upper']! - t2.angles['arm-upper']!).abs(), greaterThan(0.01),
         reason: 'the typing shoulder must oscillate');
     expect(t1.angles['arm-lower'], 0, reason: 'elbow locked');
   });
