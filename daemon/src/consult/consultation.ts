@@ -17,17 +17,32 @@ import type { Spawner } from '../narration/narrate.ts';
 export interface ConsultMessage { role: 'operator' | 'advisor'; text: string; at: number; }
 export interface ConsultSession { id: string; messages: ConsultMessage[]; createdAt: number; updatedAt: number; }
 
-// HARD plan-mode lock (task D): every consultation spawn carries these, always.
-// Plan mode = read + reason, never write or run. Not a setting — a constant.
-export const PLAN_ARGS = ['--permission-mode', 'plan', '--output-format', 'json'] as const;
+// HARD no-write lock (task D): every consultation spawn carries these, always.
+//  · `--permission-mode plan`  — the hard guarantee: never writes, never runs.
+//  · `--disallowedTools …`     — block the agentic tools too, so a turn is pure
+//    reasoning instead of a repo-wide Explore. Belt AND suspenders: plan mode
+//    already forbids writes/exec; disabling the read/research tools ALSO makes a
+//    consultation FAST (a phone chat, ~15s) instead of an 80s–timeout research
+//    run. The Advisor plans from what the operator briefs it, not by crawling
+//    the tree. Not a setting — a constant.
+//  · `--model claude-haiku-4-5` — fast, and keyless-consistent with narration.
+// The plan-mode flag stays first so the invariant test still asserts it.
+const NO_AGENT_TOOLS = 'Task,Bash,Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,NotebookEdit';
+export const PLAN_ARGS = [
+  '--permission-mode', 'plan',
+  '--disallowedTools', NO_AGENT_TOOLS,
+  '--model', 'claude-haiku-4-5',
+  '--output-format', 'json',
+] as const;
 
 const SYSTEM = [
   'You are the Advisor at WERKZ, a 1955 industrial-bureaucracy workshop, consulted by a',
   'developer to PLAN a coding job before it is dispatched to a worker. You are in PLAN',
-  'MODE: you may read the repository and reason, but you must NEVER write files or run',
-  'commands — you only advise. Reply in a dry, deadpan, bureaucratic tone (Severance/Portal),',
-  'plain and concrete. Produce a clear, actionable plan the operator can hand to a worker.',
-  'Keep it focused; no preamble, no sign-off.',
+  'MODE: you only advise — you NEVER write files or run commands. Reason from what the',
+  'operator briefs you; do NOT explore the repository — if you need specifics (a path, a',
+  'name, current behaviour), ASK for them in one short list. Reply in a dry, deadpan,',
+  'bureaucratic tone (Severance/Portal), plain and concrete. Produce a clear, actionable',
+  'plan the operator can hand to a worker. Keep it focused; no preamble, no sign-off.',
 ].join(' ');
 
 const MSG_CAP = 8 * 1024;           // one operator message

@@ -38,7 +38,15 @@ test('every consultation turn spawns claude in PLAN MODE (hard lock)', async () 
   // --permission-mode plan is ALWAYS present — the Advisor can never write/run.
   const i = args.indexOf('--permission-mode');
   assert.ok(i >= 0 && args[i + 1] === 'plan', `plan mode must be in the spawn args: ${args.join(' ')}`);
-  assert.deepEqual(PLAN_ARGS, ['--permission-mode', 'plan', '--output-format', 'json']);
+  // Belt-and-suspenders: the write/exec/research tools are ALSO disabled, so a
+  // turn is pure reasoning (fast) and provably can't touch the repo.
+  const d = args.indexOf('--disallowedTools');
+  assert.ok(d >= 0, `disallowedTools must be present: ${args.join(' ')}`);
+  for (const t of ['Bash', 'Edit', 'Write', 'Task']) {
+    assert.ok(args[d + 1].includes(t), `${t} must be disallowed`);
+  }
+  assert.equal(PLAN_ARGS[0], '--permission-mode');
+  assert.equal(PLAN_ARGS[1], 'plan');
 });
 
 test('the whole transcript is sent each turn (self-held context)', async () => {
