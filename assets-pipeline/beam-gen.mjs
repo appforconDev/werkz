@@ -43,6 +43,17 @@ async function falJson(url, key, init = {}) {
   return res.json();
 }
 
+// Task 36: Rickard's hand-cleaned beam_clean.png is the PROTECTED, authoritative
+// input (auto-pickup, like master-clean.png). If it exists, skip generation
+// entirely — never burn a gpt-image round, never overwrite the hand-clean — and
+// just resolve the final crew-beam.png from it.
+const CLEAN = path.join(ROOT, 'sprites', 'beam', 'beam_clean.png');
+if (await readFile(CLEAN).then(() => true).catch(() => false)) {
+  console.log('beam_clean.png present — Rickard\'s hand-clean is authoritative; skipping generation.');
+  execFileSync('python3', [path.join(ROOT, 'beam-cut.py')], { stdio: 'inherit' });
+  process.exit(0);
+}
+
 const key = await loadKey();
 const b64 = (await readFile(REF)).toString('base64');
 const body = {
@@ -76,11 +87,10 @@ for (const [i, img] of (result.images ?? []).entries()) {
   console.log(`saved ${path.relative(ROOT, file)} (${img.width}x${img.height})`);
 }
 
-// Isolate the CHOSEN attempt to alpha as PART of this pipeline (task 35) — so the
-// transparent strip regenerates every run, never a manual step that gets
-// overwritten. Chosen = attempt-1 (Rickard-approved); override via CHOSEN env.
+// Resolve the final beam as PART of this pipeline (beam-cut.py): it prefers the
+// hand-clean (handled above) and otherwise isolates the chosen attempt. Chosen =
+// attempt-1 (Rickard-approved); override via CHOSEN env.
 const chosen = process.env.CHOSEN ? Number(process.env.CHOSEN) : 1;
 const chosenPath = path.join(dir, `attempt-${chosen}.png`);
-const stripPath = path.join(dir, '_beam-strip.png');
-execFileSync('python3', [path.join(ROOT, 'beam-cut.py'), chosenPath, stripPath], { stdio: 'inherit' });
+execFileSync('python3', [path.join(ROOT, 'beam-cut.py'), chosenPath], { stdio: 'inherit' });
 console.log('done.');

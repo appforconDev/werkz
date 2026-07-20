@@ -155,15 +155,16 @@ class _CrewRegister extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         // The beam spans the whole screen, edge to edge — OverflowBox lets it
-        // exceed the card's symmetric horizontal padding (task 35). Its bounded
-        // SizedBox (beam aspect ≈ 0.16) keeps a finite height in the Column.
+        // exceed the card's symmetric horizontal padding (task 35). Height tracks
+        // the SOURCE aspect (task 36: Rickard's hand-clean is 1161×215 ≈ 0.185)
+        // so his art is never squished; same stacking/full-width layout as 884907c.
         SizedBox(
-          height: screenW * 0.16,
+          height: screenW * (215 / 1161),
           child: OverflowBox(
             maxWidth: screenW,
-            maxHeight: screenW * 0.16,
+            maxHeight: screenW * (215 / 1161),
             child: Image.asset('assets/images/crew-beam.png',
-                width: screenW, height: screenW * 0.16, fit: BoxFit.fill),
+                width: screenW, height: screenW * (215 / 1161), fit: BoxFit.fill),
           ),
         ),
       ],
