@@ -85,6 +85,7 @@ flutter:
     - assets/images/crew-register.png
     - assets/art/workshop-floor.png
     - assets/art/advisors-office.png
+    - assets/art/advisors-office-idle.png
     - assets/art/archive.png
     # Worker skeletal-sprite parts + rig manifests (task 19e/19l, debug-gated).
     # All three personas: Bolt (7a19), Checkwell (3c57), Sparkhand (9b72).

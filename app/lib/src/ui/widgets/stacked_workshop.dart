@@ -74,6 +74,8 @@ class StackedWorkshop extends ConsumerWidget {
                     height: heightFor(order[i].$6),
                     child: () {
                       final isAdvisor = order[i].$1 == 'advisors-office';
+                      // Tapping the Advisor storey opens the consultation — no
+                      // badge (the Advisor on the left is affordance enough).
                       Widget wrapTap(Widget w) => isAdvisor && onOpenAdvisor != null
                           ? Stack(children: [
                               Positioned.fill(child: w),
@@ -82,10 +84,6 @@ class StackedWorkshop extends ConsumerWidget {
                                   color: Colors.transparent,
                                   child: InkWell(onTap: onOpenAdvisor),
                                 ),
-                              ),
-                              const Positioned(
-                                right: 6, top: 6,
-                                child: _ConsultChip(),
                               ),
                             ])
                           : w;
@@ -155,23 +153,6 @@ class _TransitClockState extends ConsumerState<_TransitClock> with SingleTickerP
 }
 
 // A uniform steel floor slab between storeys (task 15 C3).
-// Task 39: a small affordance on the Advisor storey inviting a consultation.
-class _ConsultChip extends StatelessWidget {
-  const _ConsultChip();
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(color: Werkz.machine.withValues(alpha: 0.88), border: Border.all(color: Werkz.steel, width: 0.5)),
-      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.forum_outlined, size: 11, color: Werkz.cream),
-        SizedBox(width: 4),
-        Text('CONSULT', style: TextStyle(fontFamily: Werkz.mono, fontSize: 9, letterSpacing: 1, color: Werkz.cream)),
-      ]),
-    );
-  }
-}
-
 class _FloorSlab extends StatelessWidget {
   final double height;
   const _FloorSlab({required this.height});

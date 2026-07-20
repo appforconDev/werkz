@@ -97,41 +97,53 @@ class _AdvisorHeader extends StatelessWidget {
   const _AdvisorHeader({required this.waiting});
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 118,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // The penthouse office — the Advisor's room IS the consultation surface.
-          Image.asset('assets/art/advisors-office.png', fit: BoxFit.cover, alignment: Alignment.topCenter),
-          Container(color: Werkz.machine.withValues(alpha: 0.45)),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                IconButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.close, color: Werkz.cream, size: 20),
-                  padding: EdgeInsets.zero, constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('ADVISOR CONSULTATION',
-                          style: TextStyle(fontFamily: Werkz.mono, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 15, color: Werkz.cream)),
-                      Text(waiting ? 'THE ADVISOR IS AT THE DRAFTING TABLE…' : 'PLANNING OFFICE · PENTHOUSE',
-                          style: const TextStyle(fontFamily: Werkz.mono, fontSize: 10, letterSpacing: 1, color: Color(0xFFBFB6A0))),
-                    ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // The penthouse office — the Advisor at his desk, reading. The room IS
+        // the consultation surface; no text sits ON the art (title is below).
+        SizedBox(
+          height: 132,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.asset('assets/art/advisors-office-idle.png', fit: BoxFit.cover, alignment: Alignment.center),
+              // Close — top-left, 5px in from the top and left.
+              Positioned(
+                top: 5,
+                left: 5,
+                child: Material(
+                  color: Werkz.machine.withValues(alpha: 0.55),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.close, color: Werkz.cream, size: 20),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // Title bar — under the image, on paper, not over the art.
+        Container(
+          width: double.infinity,
+          color: Werkz.machine,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('ADVISOR CONSULTATION',
+                  style: TextStyle(fontFamily: Werkz.mono, fontWeight: FontWeight.w900, letterSpacing: 2, fontSize: 15, color: Werkz.cream)),
+              Text(waiting ? 'THE ADVISOR IS AT THE DRAFTING TABLE…' : 'PLANNING OFFICE · PENTHOUSE',
+                  style: const TextStyle(fontFamily: Werkz.mono, fontSize: 10, letterSpacing: 1, color: Color(0xFFBFB6A0))),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
