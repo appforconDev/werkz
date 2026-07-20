@@ -59,6 +59,7 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     final skel = ref.watch(skelParamsProvider);
     final roomScale = ref.watch(roomScaleProvider);
     final roomWalk = ref.watch(roomWalkSpeedProvider);
+    final roomDeskX = ref.watch(roomDeskXProvider); // task 32 B: tunable desk positions
     double scaleOf(String room) => roomScale[room] ?? 1.0;
     double walkOf(String room) => roomWalk[room] ?? 1.0;
 
@@ -105,6 +106,7 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
       }
     }
 
+    _game.applyDesks(roomDeskX[widget.room]); // task 32 B: tunable desk arrival X
     _game.setMounts(mounts);
     _game.applyParams(skel);
     _game.applyForced(ref.watch(forcedSkelStateProvider));
@@ -130,7 +132,15 @@ class _WorkerGame extends FlameGame {
   final Map<String, RigManifest> _manifests = {}; // preloaded, persona id → manifest
   final Map<String, SkeletalWorker> _mounted = {}; // persona id → live worker
   final Map<String, TextComponent> _labels = {}; // task 26 diagnosis overlay
+  List<double>? _deskX; // task 32 B: this room's tunable desk arrival X-fractions
   bool _ready = false;
+
+  void applyDesks(List<double>? xs) {
+    _deskX = xs;
+    for (final w in _mounted.values) {
+      w.desks = desksFrom(xs);
+    }
+  }
   bool _overlay = false;
   Vector2 _gameSize = Vector2.zero();
   SkelParams _params = const SkelParams();
@@ -254,7 +264,7 @@ class _WorkerGame extends FlameGame {
       w.roomWalkSpeedFactor = m.roomWalkSpeedFactor; // per-room walk-speed lens
       w.onErrand = m.onErrand; // task 28/30: dispatch-urgency pace when engaged
       w.pois = poisForRoom(room); // idle-wander points of interest (task 20c)
-      w.desks = desksForRoom(room); // workstations to type at (task 30)
+      w.desks = desksFrom(_deskX); // workstations to type at (task 30 → 32 B tunable)
       w.setTransitOverride(m.overrideXFrac, facingRight: m.facingRight);
     }
     _pushViewport();

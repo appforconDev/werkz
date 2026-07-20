@@ -79,25 +79,28 @@ class Workstation {
   const Workstation(this.x, this.facingRight);
 }
 
-/// Front-plane desks per room. A worker entering work-typing walks to the
-/// NEAREST one and faces it. Rooms with no desk here → type in place (the old
-/// behaviour) — no invented furniture where the art has none.
-const Map<String, List<Workstation>> kRoomDesks = {
-  // Workshop side desks: left desk faces left (toward the wall bench), right desk
-  // faces right. Positioned on the flat floor art's clear side zones.
-  'workshop-floor': [
-    Workstation(0.20, false), // left bench — face left
-    Workstation(0.80, true), // right bench — face right
-  ],
+/// Desk arrival X-fractions per room, `[leftX, rightX]` (task 31 C → 32 B).
+/// TUNABLE on device via roomDeskXProvider so Rickard dials each bench in, then
+/// they are codified here (rule 8). The worker walks to the NEAREST of these and
+/// faces the bench: the LEFT desk faces left (toward the wall bench), the RIGHT
+/// desk faces right. Rooms absent here have no desk → type in place (no invented
+/// furniture). Placed AT the bench in the art, not near it (32 B):
+///  - Workshop: left terminal desk ~0.13, right workbench ~0.82.
+///  - Archive: card catalog / left bench ~0.12, right shelving/terminal ~0.86.
+///  - Advisor: none (close-up room, no floor benches).
+const Map<String, List<double>> kRoomDeskX = {
+  'workshop-floor': [0.13, 0.82],
+  'archive': [0.12, 0.86],
 };
 
-List<Workstation> desksForRoom(String room) => kRoomDesks[room] ?? const [];
-
-/// The nearest desk to [x] (0..1) in [room], or null if the room has none.
-Workstation? nearestDesk(String room, double xFrac) {
-  final desks = desksForRoom(room);
-  if (desks.isEmpty) return null;
-  return desks.reduce((a, b) => (a.x - xFrac).abs() <= (b.x - xFrac).abs() ? a : b);
+/// Build the workstation list from tunable X-fractions (index 0 = left bench,
+/// faces left; index 1 = right bench, faces right).
+List<Workstation> desksFrom(List<double>? xs) {
+  if (xs == null || xs.isEmpty) return const [];
+  return [
+    Workstation(xs[0], false),
+    if (xs.length > 1) Workstation(xs[1], true),
+  ];
 }
 
 /// The interim building draws only [kRooms]. A canonical room that isn't built yet

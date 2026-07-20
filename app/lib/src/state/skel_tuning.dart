@@ -81,3 +81,25 @@ class RoomWalkSpeedController extends Notifier<Map<String, double>> {
   double of(String room) => state[room] ?? 1.0;
   void set(String room, double v) => state = {...state, room: v};
 }
+
+// Per-room desk arrival X-fractions [leftX, rightX] (task 32 B), live-tunable so
+// Rickard lands each worker AT its bench on device; defaults from the registry,
+// then codified. A worker typing walks to the nearest of these and faces it.
+final roomDeskXProvider =
+    NotifierProvider<RoomDeskXController, Map<String, List<double>>>(RoomDeskXController.new);
+
+class RoomDeskXController extends Notifier<Map<String, List<double>>> {
+  @override
+  Map<String, List<double>> build() =>
+      {for (final e in kRoomDeskX.entries) e.key: [...e.value]};
+  List<double>? of(String room) => state[room];
+  /// Set one side ([side] 0 = left, 1 = right) of a room's desk X.
+  void setSide(String room, int side, double v) {
+    final cur = [...?state[room]];
+    while (cur.length <= side) {
+      cur.add(0.5);
+    }
+    cur[side] = v;
+    state = {...state, room: cur};
+  }
+}

@@ -229,6 +229,8 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('head bob', sp.headBob, 0, 0.3, (v) => spc.update(sp.copyWith(headBob: v)), decimals: 2),
       _slider('type hz', sp.typeHz, 1, 6, (v) => spc.update(sp.copyWith(typeHz: v))),
       _slider('type swing', sp.typeSwing, 0, 1, (v) => spc.update(sp.copyWith(typeSwing: v)), decimals: 2),
+      // Task 32 A: typing forward reach bias (0 = arm down, ~1.5 = horizontal).
+      _slider('type reach', sp.typeReach, 0, 1.6, (v) => spc.update(sp.copyWith(typeReach: v)), decimals: 2),
       // Idle wander + perspective plane (task 20c).
       _slider('back scale', sp.backScale, 0.4, 1, (v) => spc.update(sp.copyWith(backScale: v)), decimals: 2),
       _slider('wander every', sp.wanderEverySec, 4, 120, (v) => spc.update(sp.copyWith(wanderEverySec: v)), decimals: 0),
@@ -258,14 +260,23 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
     final rsc = ref.read(roomScaleProvider.notifier);
     final ws = ref.watch(roomWalkSpeedProvider);
     final wsc = ref.read(roomWalkSpeedProvider.notifier);
-    List<Widget> room(String label, String room) => [
+    final dx = ref.watch(roomDeskXProvider);
+    final dxc = ref.read(roomDeskXProvider.notifier);
+    List<Widget> room(String label, String room, {bool desks = false}) => [
           _slider('$label scale', rs[room] ?? 1.0, 0.3, 4, (v) => rsc.set(room, v), decimals: 2),
           _slider('$label speed×', ws[room] ?? 1.0, 0.5, 2, (v) => wsc.set(room, v), decimals: 2),
+          // Task 32 B: desk arrival X per side — land the worker AT the bench.
+          if (desks) ...[
+            _slider('$label desk L', (dx[room] ?? const [0.13, 0.82])[0], 0, 1,
+                (v) => dxc.setSide(room, 0, v), decimals: 2),
+            _slider('$label desk R', (dx[room] ?? const [0.13, 0.82])[1], 0, 1,
+                (v) => dxc.setSide(room, 1, v), decimals: 2),
+          ],
         ];
     return [
       ...room('advisor', 'advisors-office'),
-      ...room('workshop', 'workshop-floor'),
-      ...room('archive', 'archive'),
+      ...room('workshop', 'workshop-floor', desks: true),
+      ...room('archive', 'archive', desks: true),
     ];
   }
 
