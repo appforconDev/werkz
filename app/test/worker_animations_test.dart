@@ -79,6 +79,24 @@ void main() {
     }
   });
 
+  test('work-typing arms stay FORWARD of vertical at every phase (task 31 A)', () {
+    // Root cause of the 4th arm-backward round: POSITIVE = forward, NEGATIVE =
+    // behind the back; typing used a NEGATIVE reach (−0.5) = arms behind. The
+    // envelope is now bias + swing with swing < bias, so BOTH shoulders (near +
+    // far) are strictly positive (forward) at every phase — even at the slider's
+    // max typeSwing. Facing-independent: the whole-sprite mirror preserves
+    // forward (task 26), so a joint-space > 0 lock covers both facings.
+    for (final sw in [const SkelParams(), const SkelParams(typeSwing: 1.0)]) {
+      for (var t = 0.0; t <= 5.0; t += 0.02) {
+        final pose = animatePose(WorkerAnim.workTyping, t, sw);
+        expect(pose.angles['arm-upper']!, greaterThan(0),
+            reason: 'near typing arm behind vertical at t=$t (typeSwing ${sw.typeSwing})');
+        expect(pose.angles['arm-upper-far']!, greaterThan(0),
+            reason: 'far typing arm behind vertical at t=$t (typeSwing ${sw.typeSwing})');
+      }
+    }
+  });
+
   test('every stationary anim places BOTH shoulders explicitly (task 26/30)', () {
     // The 23/25/26 bug class: an animation that OMITS a shoulder resets it to 0.
     // Every stationary animation must place both (idle/coffee to the sway, typing

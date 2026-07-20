@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -64,6 +65,10 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     // Resolve which workers are visible in THIS room this frame, at this room's
     // camera scale (blended across a cross-room transit so there is no pop). The
     // transit legs take each room's own walk-speed lens.
+    // Task 31 B: rooms with a settled worker — a transit toward an EMPTY target
+    // rushes (syncSpeedFactor) so the room isn't lit-then-waiting. Must match the
+    // same factor transit_provider.advance uses for the timing.
+    final present = presentRooms(model.workers, transit);
     final mounts = <_Mount>[];
     for (final w in model.workers) {
       final wt = transit[w.personaId];
@@ -79,9 +84,12 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
       final errand = w.status == WorkerStatus.working || w.status == WorkerStatus.walking;
       final urgency = errand ? skel.dispatchSpeedFactor : 1.0;
       if (active != null) {
+        // Rush an empty-target transit (sync) — wins over urgency (max).
+        final sync = present.contains(active.toRoom) ? 1.0 : skel.syncSpeedFactor;
+        final speedMul = math.max(urgency, sync);
         final f = transitFrame(active, params,
-            skel.walkSpeedPx * walkOf(active.fromRoom) * urgency,
-            skel.walkSpeedPx * walkOf(active.toRoom) * urgency);
+            skel.walkSpeedPx * walkOf(active.fromRoom) * speedMul,
+            skel.walkSpeedPx * walkOf(active.toRoom) * speedMul);
         if (f.room == widget.room) {
           final blend = _lerp(scaleOf(active.fromRoom), scaleOf(active.toRoom), f.progress);
           mounts.add(f.done

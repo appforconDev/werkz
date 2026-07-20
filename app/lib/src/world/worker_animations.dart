@@ -65,6 +65,11 @@ class SkelParams {
   // excursion == this amplitude (rad). Centered symmetry is structurally immune
   // to the old "behind the back" class (23→29): there is no bias to get wrong.
   final double idleSway;
+  // Sync speed (task 31 B): the THIRD speed category, above base and errand — a
+  // worker rushing to a room the UI wants to LIGHT (a room must never light
+  // empty). Multiplies the single walkSpeedPx for the transit leg heading to the
+  // sync-target room, so the light isn't delayed. Tunable; wins over urgency.
+  final double syncSpeedFactor;
   // Dispatch urgency (task 28, Rickard's number): a worker ON AN ERRAND (active
   // job — walk to site, job-route transit legs) moves at this multiple of the
   // single walkSpeedPx source. A LENS like the room factor — multipliers
@@ -90,6 +95,7 @@ class SkelParams {
     this.wanderEverySec = 40, // → a lazy ~20–60 s random rest interval
     this.dwellSec = 4,
     this.idleSway = 0.05, // task 30: ±rad symmetric idle arm sway (Rickard tunes)
+    this.syncSpeedFactor = 2.5, // task 31 B: rush-to-light-a-room speed (3rd category)
     this.dispatchSpeedFactor = 1.20, // task 28: Rickard's urgency multiple
   });
 
@@ -111,6 +117,7 @@ class SkelParams {
           double? wanderEverySec,
           double? dwellSec,
           double? idleSway,
+          double? syncSpeedFactor,
           double? dispatchSpeedFactor}) =>
       SkelParams(
         walkHz: walkHz ?? this.walkHz,
@@ -127,6 +134,7 @@ class SkelParams {
         wanderEverySec: wanderEverySec ?? this.wanderEverySec,
         dwellSec: dwellSec ?? this.dwellSec,
         idleSway: idleSway ?? this.idleSway,
+        syncSpeedFactor: syncSpeedFactor ?? this.syncSpeedFactor,
         dispatchSpeedFactor: dispatchSpeedFactor ?? this.dispatchSpeedFactor,
       );
 }
@@ -170,6 +178,13 @@ const double _elbowLock = 0.0; // arm-lower — straight forearm
 // own motion.
 double _idleSway(double sway, double t) => sway * _sin(2 * math.pi * 0.18 * t);
 
+// Work-typing forward reach (task 31 A). POSITIVE = forward (toward the desk).
+// The tap swing is capped BELOW the bias so the arm never crosses vertical:
+// with the default typeSwing 0.42, tap ∈ ±0.42·0.45 ≈ ±0.19 < 0.5 = _typeReach,
+// so arm-upper ∈ [0.31, 0.69] — strictly forward at every phase (locked by test).
+const double _typeReach = 0.5; // forward bias (must exceed _typeSwingMax·typeSwing)
+const double _typeSwingMax = 0.45; // tap amplitude as a fraction of typeSwing
+
 /// Compute the pose for [anim] at time [t] (seconds) with params [p]. The sprite
 /// is authored LEFT-FACING; facing is handled by a whole-sprite mirror at the
 /// root (see SkeletalWorker), so the angles here are always in the left-facing
@@ -207,11 +222,19 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p) {
       }, -p.bob * (0.5 + 0.5 * _sin(2 * ph)));
 
     case WorkerAnim.workTyping:
-      // Elbow LOCKED — the tap now comes from the SHOULDER (arm-upper).
-      final tap = p.typeSwing * (0.5 + 0.5 * _sin(2 * math.pi * p.typeHz * t));
+      // Task 31 A (fourth round of the arm-direction class — fixed STRUCTURALLY,
+      // root-caused): POSITIVE shoulder angle = FORWARD (toward the face / the
+      // desk); NEGATIVE = behind the back. The old reach was −0.5 (NEGATIVE) =
+      // arms stretched BEHIND the worker. 23→29 only ever looked right because
+      // idle landed on 0 (vertical); the negative typing reach was never caught.
+      // Envelope = BIAS + SWING with the SWING STRICTLY SMALLER than the bias,
+      // so the arm oscillates entirely on the FORWARD side of vertical — max
+      // backward excursion (bias − swing) is mathematically > 0, can never cross
+      // the vertical. Same structural immunity as task 30 B's centered sway.
+      final tap = _typeSwingMax * p.typeSwing * _sin(2 * math.pi * p.typeHz * t); // ±(<bias)
       return Pose({
-        'arm-upper': -0.5 - tap * 0.4, // reach to desk height + tap
-        'arm-upper-far': -0.5 - tap * 0.3, // slight offset for a two-hand tap
+        'arm-upper': _typeReach + tap, // forward reach to the desk + a small tap
+        'arm-upper-far': _typeReach + tap * 0.75, // slight offset for a two-hand tap
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'head': 0.12, // looking down at the work
       }, 0);

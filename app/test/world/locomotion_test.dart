@@ -148,6 +148,8 @@ void main() {
       expect(p.wanderMinSec, 20); // derived range
       expect(p.wanderMaxSec, 60);
       expect(p.dispatchSpeedFactor, 1.20); // task 28: Rickard's errand-urgency multiple
+      expect(p.idleSway, 0.05); // task 30: symmetric idle sway amplitude
+      expect(p.syncSpeedFactor, 2.5); // task 31 B: rush-to-light-a-room speed
       // sanity: a full walk cycle is ~2s at the slower cadence
       expect(1 / p.walkHz, closeTo(2.0, 1e-9));
     });

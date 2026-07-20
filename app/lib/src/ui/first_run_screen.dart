@@ -55,14 +55,6 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                     icon: Icons.factory,
                   ),
                   _PracticeCard(),
-                  _CardShell(
-                    title: 'THE WORKSHOP NARRATES ITSELF',
-                    body: 'When something happens, a dry line of factory bureaucracy is '
-                        'written by your own Claude — no API key, no setup. Werkz needs '
-                        'zero keys. If Claude ever cannot run, the workshop simply stays '
-                        'quiet: log lines without the voice.',
-                    icon: Icons.record_voice_over,
-                  ),
                 ],
               ),
             ),
@@ -71,7 +63,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (var i = 0; i < 3; i++)
+                  for (var i = 0; i < 2; i++)
                     Container(
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       width: 8, height: 8,
@@ -83,13 +75,13 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                   const Spacer(),
                   FilledButton(
                     onPressed: () {
-                      if (_index >= 2) {
+                      if (_index >= 1) {
                         _finish();
                       } else {
                         _page.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
                       }
                     },
-                    child: Text(_index >= 2 ? 'ENTER THE WORKSHOP' : 'NEXT'),
+                    child: Text(_index >= 1 ? 'ENTER THE WORKSHOP' : 'NEXT'),
                   ),
                 ],
               ),

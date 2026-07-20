@@ -100,6 +100,9 @@ void main() {
             frameW = worker.size.x.ceil() + 40;
             frameH = worker.size.y.ceil() + 20;
             frames.add(await _frame(worker, frameW, frameH));
+            // Task 31 A: render each phase in BOTH facings so a facing-dependent
+            // arm-direction bug (typing pointed backward) can't hide left-only.
+            frames.add(await _frame(worker, frameW, frameH, facingRight: true));
           }
           final out = '../assets-pipeline/sprites/parts-hires/$persona/_phase-$label.png';
           await _saveStrip(frames, frameW, frameH, out);

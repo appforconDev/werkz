@@ -220,6 +220,8 @@ class _LayoutTuningPanelState extends ConsumerState<LayoutTuningPanel> {
       _slider('dispatch speed×', sp.dispatchSpeedFactor, 1.0, 2.0, (v) => spc.update(sp.copyWith(dispatchSpeedFactor: v))),
       // Task 30: symmetric idle arm sway amplitude (±rad about vertical).
       _slider('idle sway', sp.idleSway, 0.0, 0.20, (v) => spc.update(sp.copyWith(idleSway: v))),
+      // Task 31 B: rush-to-light-a-room speed (3rd category, above base/errand).
+      _slider('sync speed×', sp.syncSpeedFactor, 1.0, 5.0, (v) => spc.update(sp.copyWith(syncSpeedFactor: v))),
       _slider('walk speed', sp.walkSpeedPx, 0, 120, (v) => spc.update(sp.copyWith(walkSpeedPx: v)), decimals: 0),
       _slider('leg swing', sp.legSwing, 0, 1.2, (v) => spc.update(sp.copyWith(legSwing: v)), decimals: 2),
       _slider('arm swing', sp.armSwing, 0, 1.2, (v) => spc.update(sp.copyWith(armSwing: v)), decimals: 2),

@@ -7,6 +7,8 @@ import '../models/werkz_event.dart';
 import '../models/preflight.dart';
 import '../world/worker_model.dart' show roomForEvent;
 import '../state/providers.dart';
+import '../state/transit_provider.dart';
+import '../state/worker_model_provider.dart';
 import '../state/layout_tuning.dart';
 import '../state/narration.dart';
 import 'theme.dart';
@@ -35,6 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Timer? _woDismiss; // auto-dismiss timer for a COMPLETED work-order banner
   Timer? _pairPromptTimer; // task 30 D: one-shot "pair now?" check after launch
   bool _pairPrompted = false; // shown once per cold launch — never nag on blips
+  String? _litRoom; // task 31 B: the room currently lit, held across frames
 
   @override
   void initState() {
@@ -135,6 +138,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     });
 
+    // Task 31 B: a room may never light empty. The intended room (from the feed)
+    // lights ONLY when a worker is settled there; until then the previously-lit
+    // room is held (a rushing worker is en route — sync speed). Watchdog: if the
+    // chosen lit room somehow has no worker, log loudly (never a silent gap).
+    final present = presentRooms(
+        ref.watch(workerModelProvider).workers, ref.watch(transitProvider));
+    final lit = nextLitRoom(_activeRoom(ws), present, _litRoom);
+    _litRoom = lit;
+    if (lit != null && !present.contains(lit)) {
+      debugPrint('[lighting] WATCHDOG: room "$lit" is lit but EMPTY — no worker present (present=$present)');
+    }
+
     return Scaffold(
       body: Stack(
         fit: StackFit.expand,
@@ -150,7 +165,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (ws.autopilot) const _AutopilotBanner(),
               Expanded(
                 child: StackedWorkshop(
-                  activeRoom: _activeRoom(ws),
+                  // Presence-gated (task 31 B): '' lights NOTHING rather than an
+                  // empty room. Never the raw intended room.
+                  activeRoom: lit ?? '',
                   // When the debug tuning panel is open, give the stack head/foot
                   // scroll room so a docked panel can never hide a seam (task 17b).
                   scrollPadding: tuningVisible ? 340 : 0,

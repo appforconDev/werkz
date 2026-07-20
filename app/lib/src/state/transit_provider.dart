@@ -37,6 +37,33 @@ class WorkerTransit {
   const WorkerTransit({required this.visualRoom, this.active, this.jobAtStart});
 }
 
+/// Rooms with a SETTLED worker (task 31 B) — a worker actually standing there,
+/// NOT one mid-transit toward it. This is the presence set that gates room
+/// lighting: a room may never light empty. Pure + testable.
+Set<String> presentRooms(Iterable<WorkerAgent> workers, Map<String, WorkerTransit> transit) {
+  final rooms = <String>{};
+  for (final w in workers) {
+    final t = transit[w.personaId];
+    if (t == null) {
+      rooms.add(w.currentRoom);
+    } else if (t.active == null) {
+      rooms.add(t.visualRoom); // settled → present; mid-transit contributes no room
+    }
+  }
+  return rooms;
+}
+
+/// The room that may actually LIGHT this frame (task 31 B), gated on presence.
+/// The [intended] room (from the event feed) lights ONLY once a worker is there;
+/// until then the previously-lit room is held (if still staffed), else a staffed
+/// room, else null (light NOTHING — a room is never lit + empty). Pure.
+String? nextLitRoom(String intended, Set<String> present, String? previous) {
+  if (present.contains(intended)) return intended; // the traveller arrived → light the target
+  if (previous != null && present.contains(previous)) return previous; // hold the prior lit room
+  if (present.contains('workshop-floor')) return 'workshop-floor'; // stable default staffed room
+  return present.isEmpty ? null : (present.toList()..sort()).first;
+}
+
 // The two ends the STATE-forcer 'patrol' ping-pongs between (long trip = good for
 // tuning): penthouse ↔ basement.
 const _patrolA = 'advisors-office';
@@ -90,11 +117,18 @@ class TransitController extends Notifier<Map<String, WorkerTransit>> {
   /// latest room (never skip) — or, while patrolling, bounce to the other end.
   void advance(double dt) {
     final params = ref.read(transitParamsProvider);
-    final walkSpeedPx = ref.read(skelParamsProvider).walkSpeedPx; // the ONE walk speed
+    final skel = ref.read(skelParamsProvider);
+    final walkSpeedPx = skel.walkSpeedPx; // the ONE walk speed
     final roomWalk = ref.read(roomWalkSpeedProvider); // per-room lens on it
-    double exitSp(Transit tt) => walkSpeedPx * (roomWalk[tt.fromRoom] ?? 1.0);
-    double enterSp(Transit tt) => walkSpeedPx * (roomWalk[tt.toRoom] ?? 1.0);
     final model = ref.read(workerModelProvider);
+    // Task 31 B: a transit whose TARGET room has no settled worker is a
+    // "lighting" transit — the room can't light until this worker arrives, so
+    // it RUSHES at syncSpeedFactor (the 3rd speed category). Both this timing
+    // and the visual x (worker_layer) apply the same factor so they stay in step.
+    final present = presentRooms(model.workers, state);
+    double sync(String toRoom) => present.contains(toRoom) ? 1.0 : skel.syncSpeedFactor;
+    double exitSp(Transit tt) => walkSpeedPx * (roomWalk[tt.fromRoom] ?? 1.0) * sync(tt.toRoom);
+    double enterSp(Transit tt) => walkSpeedPx * (roomWalk[tt.toRoom] ?? 1.0) * sync(tt.toRoom);
     _watchdog(dt, params, walkSpeedPx, roomWalk, model); // ALWAYS — a stall must never survive silently
     final patrol = _patrolling;
     if (!patrol && !state.values.any((w) => w.active != null)) return; // nothing moving → idle frame
