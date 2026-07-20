@@ -127,47 +127,27 @@ class _CardShell extends StatelessWidget {
   }
 }
 
-// Task 31 D → 35: the personnel-register crew photo (front-facing Bolt /
-// Checkwell / Sparkhand) filling card 1's lower half, with a rendered steel-beam
-// girder a bit below it — FULL SCREEN WIDTH (edge to edge, wider than the
-// register), escaping the card's horizontal padding via OverflowBox.
+// Task 31 D: the personnel-register crew photo (front-facing Bolt / Checkwell /
+// Sparkhand), filling card 1's lower half. Contained so it never overflows.
+// (Task 37 B: the steel beam under it was removed — it didn't read well in the
+// card; the register stands alone, as before 884907c. The beam asset + pipeline
+// are kept for a possible season-polish return.)
 class _CrewRegister extends StatelessWidget {
   const _CrewRegister();
   @override
   Widget build(BuildContext context) {
-    final screenW = MediaQuery.of(context).size.width;
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        // The register scales to fit the remaining card height (register + beam
-        // together must not overflow) while keeping its aspect.
-        Expanded(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Werkz.gunmetal, width: 1.5),
-                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
-              ),
-              child: Image.asset('assets/images/crew-register.png'),
-            ),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Werkz.gunmetal, width: 1.5),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
           ),
+          child: Image.asset('assets/images/crew-register.png', fit: BoxFit.contain),
         ),
-        const SizedBox(height: 18),
-        // The beam spans the whole screen, edge to edge — OverflowBox lets it
-        // exceed the card's symmetric horizontal padding (task 35). Height tracks
-        // the SOURCE aspect (task 36: Rickard's hand-clean is 1161×215 ≈ 0.185)
-        // so his art is never squished; same stacking/full-width layout as 884907c.
-        SizedBox(
-          height: screenW * (215 / 1161),
-          child: OverflowBox(
-            maxWidth: screenW,
-            maxHeight: screenW * (215 / 1161),
-            child: Image.asset('assets/images/crew-beam.png',
-                width: screenW, height: screenW * (215 / 1161), fit: BoxFit.fill),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
