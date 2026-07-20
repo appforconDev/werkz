@@ -16,5 +16,7 @@ export function loadJson<T>(path: string, fallback: T): T {
 
 export function saveJson(path: string, data: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(data));
+  // 0600 — state under .werkz/ holds session tokens (sessions.json, trust.json);
+  // owner-only so a shared machine can't read another user's tokens (task 37 A).
+  writeFileSync(path, JSON.stringify(data), { mode: 0o600 });
 }

@@ -27,6 +27,7 @@ import { NarrationEngine } from './narration/engine.ts';
 import { WorkOrderManager } from './work/work-order.ts';
 import { runPreflight, type Preflight } from './preflight/index.ts';
 import { readUserConfig, patchUserConfig } from './state/user-config.ts';
+import { ensureStateDir } from './state/state-dir.ts';
 import { resolveClaudePath } from './util/claude-path.ts';
 import { keepAwake } from './util/caffeinate.ts';
 
@@ -106,6 +107,10 @@ if (command === 'config') {
 // start
 const identity = deriveProjectIdentity(projectDir);
 const stateDir = flag('--state', join(projectDir, '.werkz'))!;
+// P0 SECURITY (task 37 A): make .werkz/ self-ignoring BEFORE anything writes a
+// token, lock it 0700, retire any legacy narration-key, and warn loudly if it is
+// already tracked in the user's git repo.
+ensureStateDir(stateDir, (m) => console.log(m));
 const eventsPath = flag('--events') ?? join(stateDir, 'events.jsonl');
 
 // A pairing token can be pinned across restarts so a paired phone keeps working
@@ -143,7 +148,8 @@ const workOrders = new WorkOrderManager(
 );
 
 function persistPairingToken(): void {
-  try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken); } catch { /* best effort */ }
+  // 0600 — the pairing token is a credential (task 37 A).
+  try { mkdirSync(stateDir, { recursive: true }); writeFileSync(pairingTokenPath, pairing.pairingToken, { mode: 0o600 }); } catch { /* best effort */ }
 }
 if (!pinnedToken) persistPairingToken();
 
