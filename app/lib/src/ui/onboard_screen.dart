@@ -124,15 +124,12 @@ class OnboardScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              FilledButton(
-                style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PairingScreen()),
-                ),
-                child: const Text('SCAN THE PAIRING REQUISITION',
-                    style: TextStyle(fontFamily: Werkz.mono, letterSpacing: 1)),
-              ),
+              // Task 34 B: the inline "SCAN THE PAIRING REQUISITION" button was
+              // removed — it duplicated the pinned PAIR WORKSHOP bottom bar
+              // (scrolling to the bottom showed two identical actions). The bar
+              // is Scaffold.bottomNavigationBar (its own region, not an overlay),
+              // so it can't hide this last line.
+              const SizedBox(height: 8),
             ],
           ),
             ),

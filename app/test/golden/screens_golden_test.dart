@@ -90,6 +90,19 @@ void main() {
         app: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const OnboardScreen()));
   });
 
+  // Task 34 B: scrolled to the bottom — there must be exactly ONE pairing action
+  // (the pinned PAIR WORKSHOP bar), and it must not cover the last text line.
+  testWidgets('onboarding_scrolled', (t) async {
+    await pumpGoldenApp(t,
+        app: MaterialApp(theme: Werkz.theme(), debugShowCheckedModeBanner: false, home: const OnboardScreen()));
+    await t.drag(find.byType(SingleChildScrollView), const Offset(0, -600));
+    await t.pumpAndSettle();
+    // No duplicate inline pairing button in the content.
+    expect(find.text('SCAN THE PAIRING REQUISITION'), findsNothing);
+    expect(find.text('PAIR WORKSHOP'), findsOneWidget);
+    await expectGolden(t, 'onboarding_scrolled');
+  });
+
   testWidgets('first_run', (t) async {
     await pumpGolden(t, name: 'first_run',
         app: ProviderScope(

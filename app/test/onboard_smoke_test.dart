@@ -19,8 +19,10 @@ void main() {
     expect(find.text('REPORTING FOR DUTY'), findsOneWidget);
     expect(find.text('npx werkz'), findsOneWidget);
     expect(find.textContaining('Node 22+'), findsOneWidget);
-    expect(find.text('SCAN THE PAIRING REQUISITION'), findsOneWidget);
-    // The camera scanner is NOT mounted until the button is tapped.
+    // Task 34 B: the pairing action is the pinned bottom bar only (the inline
+    // duplicate was removed). The camera scanner is NOT mounted until it's tapped.
+    expect(find.text('PAIR WORKSHOP'), findsOneWidget);
+    expect(find.text('SCAN THE PAIRING REQUISITION'), findsNothing);
     expect(find.byType(OnboardScreen), findsOneWidget);
   });
 
