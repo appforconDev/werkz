@@ -46,6 +46,11 @@ class SkelParams {
   final double headBob; // head nod amplitude (rad)
   final double typeHz; // forearm tap frequency (rad driver)
   final double typeSwing; // forearm tap amplitude (rad)
+  // Work-typing forward reach bias (task 32 A, tunable). POSITIVE = forward. The
+  // tap swing is clamped strictly BELOW this so both shoulders stay forward of
+  // vertical at every phase (the task-31 A invariant). Lowered from 0.5 → the
+  // arms read more horizontal-forward, not diagonally down.
+  final double typeReach;
   // Mount scale + position (task 19g). workerHeightPx is the total on-screen
   // worker height in LOGICAL px (~100–140 target; tune up for "big robot"
   // moments). workerX is the horizontal HOME position on the floor band, 0..1.
@@ -88,6 +93,7 @@ class SkelParams {
     this.headBob = 0.06,
     this.typeHz = 1.7,
     this.typeSwing = 0.42,
+    this.typeReach = 1.2, // task 32 A: near-horizontal forward reach (0.5 read as diagonal-DOWN; the render sweep shows horizontal needs a HIGHER angle, not lower)
     this.workerHeightPx = 80, // Rickard's tuned wide-shot value; Advisor scales up ×2.4 per-room
     this.workerX = 0.5,
     this.walkSpeedPx = 13, // the ONE walk speed — every walking state reads this
@@ -110,6 +116,7 @@ class SkelParams {
           double? headBob,
           double? typeHz,
           double? typeSwing,
+          double? typeReach,
           double? workerHeightPx,
           double? workerX,
           double? walkSpeedPx,
@@ -127,6 +134,7 @@ class SkelParams {
         headBob: headBob ?? this.headBob,
         typeHz: typeHz ?? this.typeHz,
         typeSwing: typeSwing ?? this.typeSwing,
+        typeReach: typeReach ?? this.typeReach,
         workerHeightPx: workerHeightPx ?? this.workerHeightPx,
         workerX: workerX ?? this.workerX,
         walkSpeedPx: walkSpeedPx ?? this.walkSpeedPx,
@@ -182,8 +190,8 @@ double _idleSway(double sway, double t) => sway * _sin(2 * math.pi * 0.18 * t);
 // The tap swing is capped BELOW the bias so the arm never crosses vertical:
 // with the default typeSwing 0.42, tap ∈ ±0.42·0.45 ≈ ±0.19 < 0.5 = _typeReach,
 // so arm-upper ∈ [0.31, 0.69] — strictly forward at every phase (locked by test).
-const double _typeReach = 0.5; // forward bias (must exceed _typeSwingMax·typeSwing)
-const double _typeSwingMax = 0.45; // tap amplitude as a fraction of typeSwing
+// Tap amplitude as a fraction of typeSwing (task 32 A: ~1/3 of the old 0.45).
+const double _typeSwingMax = 0.15;
 
 /// Compute the pose for [anim] at time [t] (seconds) with params [p]. The sprite
 /// is authored LEFT-FACING; facing is handled by a whole-sprite mirror at the
@@ -231,10 +239,14 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p) {
       // so the arm oscillates entirely on the FORWARD side of vertical — max
       // backward excursion (bias − swing) is mathematically > 0, can never cross
       // the vertical. Same structural immunity as task 30 B's centered sway.
-      final tap = _typeSwingMax * p.typeSwing * _sin(2 * math.pi * p.typeHz * t); // ±(<bias)
+      // The tap is clamped to STAY below the bias (invariant wins over amplitude,
+      // task 32 A): even if the bias slider is dragged low, the arm never crosses
+      // vertical. tapAmp = min(1/3-ish of typeSwing, 60% of the reach).
+      final tapAmp = math.min(_typeSwingMax * p.typeSwing, 0.6 * p.typeReach);
+      final tap = tapAmp * _sin(2 * math.pi * p.typeHz * t); // ±tapAmp, tapAmp < bias
       return Pose({
-        'arm-upper': _typeReach + tap, // forward reach to the desk + a small tap
-        'arm-upper-far': _typeReach + tap * 0.75, // slight offset for a two-hand tap
+        'arm-upper': p.typeReach + tap, // forward reach to the desk + a small tap
+        'arm-upper-far': p.typeReach + tap * 0.75, // slight offset for a two-hand tap
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'head': 0.12, // looking down at the work
       }, 0);

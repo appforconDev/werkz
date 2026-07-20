@@ -142,6 +142,7 @@ void main() {
       expect(p.armSwing, 0.41);
       expect(p.bob, 3);
       expect(p.typeSwing, 0.42);
+      expect(p.typeReach, 1.2); // task 32 A: near-horizontal forward typing reach
       expect(p.backScale, 0.78); // 20c perspective-plane back-line scale
       expect(p.wanderEverySec, 40); // 20c: lazy ~20–60s wander interval
       expect(p.dwellSec, 4);
