@@ -111,7 +111,7 @@ Deliberately thin — Verk is a solo game with braggable artifacts. Social v1 = 
 
 ## 6. Monetization
 
-BYOK end-to-end (narration runs on the user's key; Haiku-class suffices). Marginal cost per free user ≈ zero.
+Keyless narration (task 30 E, revised from BYOK): narration runs by spawning the user's own `claude` in Haiku mode — no API key at all; Haiku-class suffices. Marginal cost per free user ≈ zero.
 
 **Core promise (free forever):** The entire local core experience — daemon + app on one machine over LAN, one theme, one active project, all decision mechanics incl. the Octagon, narration (BYOK), workshop progression. Generosity is the business strategy: free users produce recap cards = negative-CAC marketing.
 

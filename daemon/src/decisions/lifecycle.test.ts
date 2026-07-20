@@ -15,7 +15,6 @@ import { defaultConfig } from '../config.ts';
 import { TrustStore } from './trust.ts';
 import { createDaemonServer } from '../server/http.ts';
 import { PairingManager } from '../pairing/auth.ts';
-import { NarrationKeyStore } from '../narration/key-store.ts';
 import type { WerkzEvent } from '../events/types.ts';
 
 function svc(trustValue = 100) {
@@ -111,7 +110,7 @@ test('A1/A3 e2e: destroy the /pretooluse socket → snapshot empty', async () =>
   const stateDir = mkdtempSync(join(tmpdir(), 'werkz-lifecycle-'));
   const pairing = new PairingManager('pair-tok');
   const server = createDaemonServer({
-    service, pairing, narrationKeys: new NarrationKeyStore(join(stateDir, 'narration-key')), devMode: false,
+    service, pairing, devMode: false,
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const port = (server.address() as { port: number }).port;

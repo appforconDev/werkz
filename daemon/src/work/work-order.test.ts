@@ -120,17 +120,6 @@ test('report is capped at 16KB with a LOUD truncation marker (23B)', () => {
   assert.ok(capped.endsWith(REPORT_TRUNCATION_MARKER), 'truncation must be loudly marked');
 });
 
-test('key status exposes last4 but never the whole key', async () => {
-  const { NarrationKeyStore } = await import('../narration/key-store.ts');
-  const s = new NarrationKeyStore(null);
-  assert.deepEqual(s.status(), { present: false, updatedAt: null, last4: null });
-  s.setKey('sk-ant-abcd1234', '2026-07-17T00:00:00.000Z');
-  const st = s.status();
-  assert.equal(st.present, true);
-  assert.equal(st.last4, '1234');
-  assert.equal(JSON.stringify(st).includes('sk-ant'), false);
-});
-
 // Resolve when the bus sees an event of `type` (with a timeout guard).
 function once(bus: EventBus, type: string): Promise<void> {
   return new Promise((resolve, reject) => {

@@ -7,7 +7,8 @@ import 'widgets/requisition_overlay.dart';
 
 // First-run flow (GDD §7.1): three 1955-toned cards, shown once, skippable,
 // re-openable from settings. Card 2 lets the user practice-swipe a MOCK
-// requisition (no daemon call). Card 3 optionally takes the narration key.
+// requisition (no daemon call). Card 3 explains keyless narration (task 30 E:
+// the BYOK key step is gone — narration runs on the user's own claude).
 class FirstRunScreen extends ConsumerStatefulWidget {
   const FirstRunScreen({super.key});
   @override
@@ -54,7 +55,14 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                     icon: Icons.factory,
                   ),
                   _PracticeCard(),
-                  _KeyCard(),
+                  _CardShell(
+                    title: 'THE WORKSHOP NARRATES ITSELF',
+                    body: 'When something happens, a dry line of factory bureaucracy is '
+                        'written by your own Claude — no API key, no setup. Werkz needs '
+                        'zero keys. If Claude ever cannot run, the workshop simply stays '
+                        'quiet: log lines without the voice.',
+                    icon: Icons.record_voice_over,
+                  ),
                 ],
               ),
             ),
@@ -173,69 +181,3 @@ class _PracticeCardState extends State<_PracticeCard> {
   }
 }
 
-class _KeyCard extends ConsumerStatefulWidget {
-  const _KeyCard();
-  @override
-  ConsumerState<_KeyCard> createState() => _KeyCardState();
-}
-
-class _KeyCardState extends ConsumerState<_KeyCard> {
-  final _ctrl = TextEditingController();
-  bool _busy = false;
-  String? _msg;
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final key = _ctrl.text.trim();
-    if (key.isEmpty) return;
-    setState(() { _busy = true; _msg = null; });
-    // Store on device, and send to the daemon (which keeps it locally).
-    await ref.read(secureStorageProvider).write(key: 'werkz.narrationKey', value: key);
-    final ok = await ref.read(workshopProvider.notifier).setNarrationKey(key);
-    if (mounted) {
-      setState(() {
-        _busy = false;
-        _msg = ok ? 'Narration engaged. The workshop will find its voice.' : 'Saved on device — will retry when the workshop connects.';
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _CardShell(
-      title: 'NARRATION KEY (OPTIONAL)',
-      body: 'Paste an Anthropic (Haiku) API key to give the workshop a narrator. '
-          'It goes to your daemon and stays there — never to us. Skip this and you '
-          'get dry log lines instead.',
-      icon: Icons.record_voice_over,
-      child: Column(
-        children: [
-          TextField(
-            controller: _ctrl,
-            obscureText: true,
-            style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12),
-            decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'sk-ant-…'),
-          ),
-          const SizedBox(height: 10),
-          FilledButton(
-            onPressed: _busy ? null : _save,
-            child: _busy
-                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('ENGAGE NARRATION'),
-          ),
-          if (_msg != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(_msg!, textAlign: TextAlign.center,
-                  style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.approvalGreen)),
-            ),
-        ],
-      ),
-    );
-  }
-}

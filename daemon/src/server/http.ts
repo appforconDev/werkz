@@ -16,7 +16,6 @@
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { DecisionService } from '../decisions/service.ts';
 import type { PairingManager } from '../pairing/auth.ts';
-import type { NarrationKeyStore } from '../narration/key-store.ts';
 import type { Preflight } from '../preflight/index.ts';
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -36,17 +35,15 @@ function tokenFrom(req: IncomingMessage, url: URL): string | null {
 export interface ServerDeps {
   service: DecisionService;
   pairing: PairingManager;
-  narrationKeys: NarrationKeyStore;
   devMode: boolean;
   onReissuePairing?: () => void; // reprint the QR after a fresh token is issued
-  onKeyAccepted?: () => void;    // emit key.accepted (proof-of-life narration)
   onWorkOrder?: (directive: string) => { ok: boolean; error?: string };
   getPreflight?: () => Preflight; // startup diagnostics, exposed to the phone (task 13 B)
   log?: (msg: string) => void;
 }
 
 export function createDaemonServer({
-  service, pairing, narrationKeys, devMode, onReissuePairing, onKeyAccepted, onWorkOrder, getPreflight, log = () => {},
+  service, pairing, devMode, onReissuePairing, onWorkOrder, getPreflight, log = () => {},
 }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -110,7 +107,7 @@ export function createDaemonServer({
     }
 
     // --- Phone-facing (require session token) ---
-    const phonePaths = new Set(['/pending', '/status', '/release', '/narration-key', '/narration-key/status', '/unpair', '/work-order', '/preflight']);
+    const phonePaths = new Set(['/pending', '/status', '/release', '/unpair', '/work-order', '/preflight']);
     if (phonePaths.has(path)) {
       const token = tokenFrom(req, url);
       if (!pairing.verify(token)) return json(res, 401, { error: 'unpaired — POST /pair first' });
@@ -132,7 +129,6 @@ export function createDaemonServer({
         return json(res, 200, {
           pending: service.pendingCount,
           ...service.permissionModeSummary(),
-          narration: narrationKeys.status(),
           ...(getPreflight ? { preflight: getPreflight() } : {}),
         });
       }
@@ -147,23 +143,8 @@ export function createDaemonServer({
         const ok = service.release(id, decision);
         return json(res, ok ? 200 : 409, ok ? { released: decision } : { error: 'no such pending decision' });
       }
-      // BYOK narration key — set/clear over the paired channel; stays on the daemon.
-      if (req.method === 'POST' && path === '/narration-key') {
-        const body = safeParse(await readBody(req));
-        const key = typeof body.key === 'string' ? body.key : '';
-        if (key.trim()) {
-          narrationKeys.setKey(key, new Date().toISOString());
-          log('narration key set');
-          onKeyAccepted?.(); // proof-of-life: narrate a key.accepted line immediately
-        } else {
-          narrationKeys.clear();
-          log('narration key cleared');
-        }
-        return json(res, 200, narrationKeys.status());
-      }
-      if (req.method === 'GET' && path === '/narration-key/status') {
-        return json(res, 200, narrationKeys.status());
-      }
+      // (task 30 E: the BYOK narration-key endpoints are removed — narration now
+      // spawns the user's own `claude`, zero keys.)
       // Work order (task 11 C): one directive → one headless job.
       if (req.method === 'POST' && path === '/work-order') {
         const body = safeParse(await readBody(req));

@@ -23,8 +23,6 @@ import { printPairing } from './pairing/qr.ts';
 import { advertise } from './net/mdns.ts';
 import { installHook, uninstallHook } from './install/hooks.ts';
 import { deriveProjectIdentity } from './adapter/cc/project.ts';
-import { buildEvent } from './adapter/cc/index.ts';
-import { NarrationKeyStore } from './narration/key-store.ts';
 import { NarrationEngine } from './narration/engine.ts';
 import { WorkOrderManager } from './work/work-order.ts';
 import { runPreflight, type Preflight } from './preflight/index.ts';
@@ -125,8 +123,6 @@ const bus = new EventBus(eventsPath);
 const trust = new TrustStore(0, join(stateDir, 'trust.json'));
 const service = new DecisionService(defaultConfig, bus, trust, pendingPath);
 const pairing = new PairingManager(pinnedToken, sessionsPath);
-const narrationKeys = new NarrationKeyStore(join(stateDir, 'narration-key'));
-new NarrationEngine(bus, narrationKeys); // fire-and-forget Haiku narration when a key is set
 
 // Preflight diagnostics (task 13 B): resolve the claude binary + check the
 // environment ONCE at startup. The result gates dispatch and rides /status +
@@ -137,6 +133,10 @@ let preflight: Preflight = runPreflight({
   projectDir, configClaudePath: userConfig.claudePath, port, portBindable: true,
 });
 const getPreflight = (): Preflight => preflight;
+
+// Zero-key narration (task 30 E): spawns the user's own resolved `claude` in
+// Haiku print mode — no API key. Quiet (dry templates) if no binary is found.
+new NarrationEngine(bus, preflight.claudePath, { log: (m) => console.log(`  · ${m}`) });
 
 const workOrders = new WorkOrderManager(
   projectDir, identity.projectId, bus, (m) => console.log(`  · ${m}`), preflight.claudePath,
@@ -157,14 +157,8 @@ function reissuePairing(): void {
 const server = createDaemonServer({
   service,
   pairing,
-  narrationKeys,
   devMode,
   onReissuePairing: reissuePairing,
-  // Proof-of-life: narrate a key.accepted line the moment a key is set.
-  onKeyAccepted: () => bus.emit(buildEvent({
-    sessionId: 'building', projectId: identity.projectId, workerId: null,
-    eventType: 'key.accepted', severity: 'info', payload: { room: 'advisors-office' },
-  })),
   onWorkOrder: (directive) => workOrders.dispatch(directive),
   getPreflight,
   log: (m) => console.log(`  · ${m}`),
@@ -227,7 +221,7 @@ server.listen(port, () => {
   console.log(`  project:  ${projectDir}  (workshop ${identity.projectId}, by ${identity.source})`);
   console.log(`  hook:     ${install.changed ? 'installed into' : 'already present in'} ${install.path}`);
   console.log(`  ws:       ws://…:${port}/ws  (session-token auth)`);
-  console.log(`  narration: ${narrationKeys.hasKey() ? 'BYOK key set — Haiku live' : 'templates only (no key)'}`);
+  console.log(`  narration: ${preflight.claudePath ? 'via your claude (Haiku, no key)' : 'templates only (no claude found)'}`);
   console.log(`  awake:    ${caffeination.note}`);
   if (recovered) console.log(`  recovery: ${recovered} orphaned decision(s) superseded after restart`);
   if (devMode) console.log(`  dev mode: ON (/dev/* endpoints enabled)`);

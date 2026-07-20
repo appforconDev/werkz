@@ -110,8 +110,6 @@ class WorkshopState {
   final String? permissionMode;
   // eventId → real Haiku narration line (replaces the local template when present).
   final Map<String, String> narration;
-  final bool narrationActive; // daemon confirms a BYOK key is set
-  final String? narrationLast4;
   final Preflight? preflight; // daemon startup diagnostics (null until first welcome)
   final WorkOrderStatus workOrder;
   // Daemon unreachable across several reconnect attempts (machine asleep /
@@ -129,8 +127,6 @@ class WorkshopState {
     this.autopilot = false,
     this.permissionMode,
     this.narration = const {},
-    this.narrationActive = false,
-    this.narrationLast4,
     this.preflight,
     this.workOrder = const WorkOrderStatus(),
     this.unreachable = false,
@@ -145,8 +141,6 @@ class WorkshopState {
     bool? autopilot,
     String? permissionMode,
     Map<String, String>? narration,
-    bool? narrationActive,
-    String? narrationLast4,
     Preflight? preflight,
     WorkOrderStatus? workOrder,
     bool? unreachable,
@@ -161,8 +155,6 @@ class WorkshopState {
         autopilot: autopilot ?? this.autopilot,
         permissionMode: permissionMode ?? this.permissionMode,
         narration: narration ?? this.narration,
-        narrationActive: narrationActive ?? this.narrationActive,
-        narrationLast4: narrationLast4 ?? this.narrationLast4,
         preflight: preflight ?? this.preflight,
         workOrder: workOrder ?? this.workOrder,
         unreachable: unreachable ?? this.unreachable,
@@ -243,7 +235,6 @@ class WorkshopController extends Notifier<WorkshopState> {
     client.onWelcome = (pending, autopilot, mode, preflight) {
       if (_disposed) return;
       state = state.copyWith(pending: pending, autopilot: autopilot, permissionMode: mode, preflight: preflight);
-      _syncNarration(); // retry a queued key + refresh the "narration active" chip
     };
     client.onEvent = (e, replay) {
       if (!_disposed) _handleEvent(e, replay);
@@ -354,32 +345,8 @@ class WorkshopController extends Notifier<WorkshopState> {
     if (kDebugMode) debugPrint('decided $decisionId → $decision');
   }
 
-  /// Send the BYOK narration key to the daemon (settings / first-run card 3).
-  /// Returns true when the daemon confirmed. On failure the key is still stored
-  /// locally by the caller and re-sent on the next connect (_syncNarration).
-  Future<bool> setNarrationKey(String key) async {
-    final c = _client;
-    if (c == null) return false;
-    final ok = await c.setNarrationKey(key);
-    if (ok && !_disposed) {
-      final (present, last4) = await c.narrationKeyStatus();
-      if (!_disposed) state = state.copyWith(narrationActive: present, narrationLast4: last4);
-    }
-    return ok;
-  }
-
-  /// On (re)connect: resend a locally-queued key (retry), then refresh the
-  /// narration status (active + key suffix) from the daemon's authority.
-  Future<void> _syncNarration() async {
-    final c = _client;
-    if (c == null) return;
-    final stored = await ref.read(secureStorageProvider).read(key: 'werkz.narrationKey');
-    if (stored != null && stored.isNotEmpty) {
-      await c.setNarrationKey(stored);
-    }
-    final (present, last4) = await c.narrationKeyStatus();
-    if (!_disposed) state = state.copyWith(narrationActive: present, narrationLast4: last4);
-  }
+  // (task 30 E: BYOK narration keys removed — narration now runs by the daemon
+  // spawning the user's own `claude`; no key to set, sync, or store.)
 
   /// Clear the work-order status banner (task 15 D — COMPLETED auto-dismiss or a
   /// tap on COMPLETED/FAILED). A running job's IN PROGRESS is never cleared here.

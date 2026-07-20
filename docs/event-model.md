@@ -234,7 +234,10 @@ Verified in the hold prototype: after a `deny`, the model often **retries the sa
 
 Humor must describe what actually happened (GDD humor engine): the narration prompt receives real counters and must reference them. No random one-liners; routine stays dry — comedy is contrast.
 
-### 4.2 Narration input contract (BYOK Haiku-class, user's key, never our backend)
+### 4.2 Narration input contract (Haiku-class via the user's own `claude`, never our backend)
+
+> **REVISED 2026-07-20 (task 30 E, approved):** narration no longer uses a BYOK Anthropic API key. The daemon spawns the user's own `claude` binary in one-shot print mode with `--model claude-haiku-4-5` (the same binary already resolved for work orders). No key store, no `/narration-key` endpoints, no key UI — zero setup. Same spirit (their compute/auth, never our backend). Graceful degradation: no `claude` / spawn failure / plan limit ⇒ no `narration.ready` emitted and the app shows dry templates (a quiet workshop is not an error). The game-safe input contract below is unchanged; only the transport (spawn vs. HTTPS) and the key requirement (none) changed.
+
 
 ```ts
 interface NarrationRequest {

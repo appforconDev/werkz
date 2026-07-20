@@ -18,38 +18,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final _keyCtrl = TextEditingController();
-  bool _busy = false;
-  String? _msg;
-
-  @override
-  void dispose() {
-    _keyCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveKey() async {
-    final key = _keyCtrl.text.trim();
-    setState(() { _busy = true; _msg = null; });
-    // Store locally first so we can retry on the next connect if the daemon is
-    // unreachable right now.
-    if (key.isEmpty) {
-      await ref.read(secureStorageProvider).delete(key: 'werkz.narrationKey');
-    } else {
-      await ref.read(secureStorageProvider).write(key: 'werkz.narrationKey', value: key);
-    }
-    final ok = await ref.read(workshopProvider.notifier).setNarrationKey(key);
-    if (mounted) {
-      setState(() {
-        _busy = false;
-        _msg = ok
-            ? (key.isEmpty ? 'Key cleared — templates only.' : 'Saved → daemon confirmed. Narration active.')
-            : 'Saved on device — the workshop is offline; will retry on reconnect.';
-        if (ok) _keyCtrl.clear();
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final ws = ref.watch(workshopProvider);
@@ -90,32 +58,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
 
           _section('NARRATION'),
-          _NarrationStatusBlock(active: ws.narrationActive, last4: ws.narrationLast4),
-          const SizedBox(height: 10),
           const Text(
-            'Your Anthropic (Haiku) API key powers narration. It is sent to your '
-            'daemon and stays on that machine — never to us, never in git.',
+            'Narration runs on your own Claude — no API key. When something happens, '
+            'your daemon asks Claude (Haiku) for one dry line. If Claude cannot run, '
+            'the workshop simply stays quiet: log lines without the voice.',
             style: TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.gunmetal),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _keyCtrl,
-            obscureText: true,
-            style: const TextStyle(fontFamily: Werkz.mono, fontSize: 12),
-            decoration: const InputDecoration(border: OutlineInputBorder(), hintText: 'sk-ant-…  (blank to clear)'),
-          ),
-          // Inline status UNDER the field — never a covering sheet (B2).
-          if (_msg != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_msg!, style: const TextStyle(fontFamily: Werkz.mono, fontSize: 11, color: Werkz.approvalGreen)),
-            ),
-          const SizedBox(height: 10),
-          FilledButton(
-            onPressed: _busy ? null : _saveKey,
-            child: _busy
-                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('SEND KEY TO WORKSHOP'),
           ),
           const SizedBox(height: 24),
 
@@ -207,26 +154,4 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ),
       );
-}
-
-// Clear state block (B4): active with key suffix, or "no key — templates only".
-class _NarrationStatusBlock extends StatelessWidget {
-  final bool active;
-  final String? last4;
-  const _NarrationStatusBlock({required this.active, required this.last4});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = active ? Werkz.approvalGreen : Werkz.steel;
-    final text = active
-        ? '● NARRATION ACTIVE${last4 != null ? ' — key ending …$last4' : ''}'
-        : '○ No key — templates only';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(border: Border.all(color: color), color: Werkz.carbon),
-      child: Text(text,
-          style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: color, fontWeight: FontWeight.bold)),
-    );
-  }
 }

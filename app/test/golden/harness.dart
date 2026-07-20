@@ -40,8 +40,6 @@ class GoldenClient extends DaemonClient {
   void connect() {}
   @override
   void dispose() {}
-  @override
-  Future<(bool, String?)> narrationKeyStatus() async => (false, null);
 }
 
 class GoldenStorage extends FlutterSecureStorage {

@@ -167,35 +167,8 @@ class DaemonClient {
         'authorization': 'Bearer $sessionToken',
       };
 
-  /// Send the BYOK narration key to the daemon over the paired channel. Empty
-  /// clears it. The daemon stores it locally; it never leaves that machine.
-  Future<bool> setNarrationKey(String key) async {
-    try {
-      final res = await http.post(
-        Uri.parse('${payload.httpBase}/narration-key'),
-        headers: _authHeaders,
-        body: jsonEncode({'key': key}),
-      );
-      return res.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Narration key status: (present, last4). last4 is a display suffix only.
-  Future<(bool, String?)> narrationKeyStatus() async {
-    try {
-      final res = await http.get(
-        Uri.parse('${payload.httpBase}/narration-key/status'),
-        headers: _authHeaders,
-      );
-      if (res.statusCode != 200) return (false, null);
-      final j = jsonDecode(res.body) as Map<String, dynamic>;
-      return (j['present'] == true, j['last4'] as String?);
-    } catch (_) {
-      return (false, null);
-    }
-  }
+  // (task 30 E: setNarrationKey / narrationKeyStatus removed — narration is
+  // keyless now; the daemon spawns the user's own `claude`.)
 
   /// File a work order — one directive → one headless job. Returns (ok, error?).
   Future<(bool, String?)> fileWorkOrder(String directive) async {

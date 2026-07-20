@@ -7,12 +7,11 @@ import 'package:werkz_app/src/daemon/daemon_client.dart';
 import 'package:werkz_app/src/models/pairing_payload.dart';
 import 'package:werkz_app/src/state/providers.dart';
 
-// A fake daemon: a one-time token that can be reissued, plus a key store.
+// A fake daemon: a one-time token that can be reissued.
 class _FakeDaemon {
   String pairingToken;
   bool used = false;
   final sessions = <String>{};
-  String? key;
   bool reachable = true;
   bool jobRunning = false;
   int _n = 0;
@@ -40,18 +39,6 @@ class _FakeClient extends DaemonClient {
   void connect() {}
   @override
   void dispose() {}
-  @override
-  Future<bool> setNarrationKey(String key) async {
-    if (!daemon.reachable) return false;
-    daemon.key = key.isEmpty ? null : key;
-    return true;
-  }
-  @override
-  Future<(bool, String?)> narrationKeyStatus() async {
-    final present = daemon.reachable && daemon.key != null;
-    return (present, present ? daemon.key!.substring(daemon.key!.length - 4) : null);
-  }
-
   @override
   Future<(bool, String?)> fileWorkOrder(String directive) async {
     if (!daemon.reachable) return (false, 'workshop offline');
@@ -105,34 +92,6 @@ void main() {
     expect(payload(daemon.pairingToken).token, daemon.pairingToken);
   });
 
-  test('key save: daemon confirmed → narrationActive true', () async {
-    _MemStorage.store.clear();
-    final daemon = _FakeDaemon('tok');
-    final s = daemon.pair('tok')!;
-    final pairing = PairingPayload(host: '127.0.0.1', port: 1, token: 'tok');
-
-    final container = ProviderContainer(overrides: [
-      secureStorageProvider.overrideWithValue(const _MemStorage()),
-      daemonClientBuilderProvider.overrideWithValue((p) => _FakeClient(daemon, pairing, s)),
-    ]);
-    addTearDown(container.dispose);
-
-    // Force a StoredPairing into the pairing controller by writing storage.
-    _MemStorage.store.addAll({
-      'werkz.sessionToken': s, 'werkz.host': '127.0.0.1', 'werkz.port': '1',
-      'werkz.pairToken': 'tok', 'werkz.seenFirstRun': '1',
-    });
-    await container.read(pairingControllerProvider.future);
-    container.read(workshopProvider);
-    await Future<void>.delayed(Duration.zero); // flush deferred connect
-
-    final ok = await container.read(workshopProvider.notifier).setNarrationKey('sk-ant-wxyz');
-    expect(ok, isTrue);
-    final ws = container.read(workshopProvider);
-    expect(ws.narrationActive, isTrue);
-    expect(ws.narrationLast4, 'wxyz'); // "key ending …wxyz" display
-  });
-
   test('work order: first dispatch ok, second rejected (one at a time)', () async {
     _MemStorage.store.clear();
     final daemon = _FakeDaemon('tok');
@@ -157,36 +116,5 @@ void main() {
     final (ok2, err2) = await notifier.fileWorkOrder('do another');
     expect(ok2, isFalse);
     expect(err2, contains('already in progress'));
-  });
-
-  test('key save: daemon offline → returns false (caller queues locally)', () async {
-    _MemStorage.store.clear();
-    final daemon = _FakeDaemon('tok')..reachable = false;
-    final s = 'sess-x';
-    daemon.sessions.add(s);
-    final pairing = PairingPayload(host: '127.0.0.1', port: 1, token: 'tok');
-
-    final container = ProviderContainer(overrides: [
-      secureStorageProvider.overrideWithValue(const _MemStorage()),
-      daemonClientBuilderProvider.overrideWithValue((p) => _FakeClient(daemon, pairing, s)),
-    ]);
-    addTearDown(container.dispose);
-    _MemStorage.store.addAll({
-      'werkz.sessionToken': s, 'werkz.host': '127.0.0.1', 'werkz.port': '1',
-      'werkz.pairToken': 'tok', 'werkz.seenFirstRun': '1',
-    });
-    await container.read(pairingControllerProvider.future);
-    container.read(workshopProvider);
-    await Future<void>.delayed(Duration.zero);
-
-    final ok = await container.read(workshopProvider.notifier).setNarrationKey('sk-ant-x');
-    expect(ok, isFalse);
-    expect(container.read(workshopProvider).narrationActive, isFalse);
-
-    // Comes back online → retry on reconnect applies the queued key.
-    daemon.reachable = true;
-    _MemStorage.store['werkz.narrationKey'] = 'sk-ant-x';
-    await container.read(workshopProvider.notifier).setNarrationKey('sk-ant-x');
-    expect(container.read(workshopProvider).narrationActive, isTrue);
   });
 }

@@ -28,7 +28,7 @@ You are working in the Werkz monorepo: a mobile game layer for agentic coding. R
 - **Shareable content renders from an allowlist of game objects.** No raw strings from the user's repo (no filenames, code, repo names, branch names) may ever reach a share card, replay, or recap. A leak is an incident.
 - **Notifications: max 4 types, all event-driven** (decision pending, octagon verdict, evening report on active days, golden moment). No scheduled, no re-engagement, no "we miss you" — ever.
 - **Trust decays only on bad/missed decisions, never on calendar time.** Absence is never punished anywhere in the system (maintenance mode instead).
-- **BYOK:** narration runs on the user's key (Haiku-class). Our backend never proxies user LLM calls in free tier.
+- **Keyless narration (task 30 E, revised from BYOK):** narration runs by the daemon spawning the user's own `claude` binary in Haiku print mode — NO API key anywhere (the BYOK key store/endpoints/UI were removed). Same spirit (their compute, their auth), zero setup. Our backend never proxies user LLM calls. Graceful: no claude / plan limit ⇒ the workshop is quiet (dry templates), never an error.
 
 ## Event model conventions (once docs/event-model.md exists)
 
