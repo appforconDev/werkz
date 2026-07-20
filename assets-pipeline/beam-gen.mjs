@@ -5,6 +5,7 @@
 // on a crop of the Workshop ceiling beam so the material/palette match the world
 // rather than reading like a flat UI widget. Candidates → sprites/beam/<i>.png.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -74,4 +75,12 @@ for (const [i, img] of (result.images ?? []).entries()) {
   await writeFile(file, Buffer.from(await data.arrayBuffer()));
   console.log(`saved ${path.relative(ROOT, file)} (${img.width}x${img.height})`);
 }
+
+// Isolate the CHOSEN attempt to alpha as PART of this pipeline (task 35) — so the
+// transparent strip regenerates every run, never a manual step that gets
+// overwritten. Chosen = attempt-1 (Rickard-approved); override via CHOSEN env.
+const chosen = process.env.CHOSEN ? Number(process.env.CHOSEN) : 1;
+const chosenPath = path.join(dir, `attempt-${chosen}.png`);
+const stripPath = path.join(dir, '_beam-strip.png');
+execFileSync('python3', [path.join(ROOT, 'beam-cut.py'), chosenPath, stripPath], { stdio: 'inherit' });
 console.log('done.');
