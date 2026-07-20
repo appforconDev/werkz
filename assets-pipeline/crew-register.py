@@ -51,23 +51,15 @@ for i,((fig,pid,name,title),fw) in enumerate(zip(figs,fig_ws)):
     img.paste(fig,(int(x),base_y-FIG_H),fig)
     x += fw + inter
 
-# STEEL BEAM floor girder under the lineup, with a riveted WERKZ plate
-beam_y = base_y+2; beam_h=34
-d.rectangle((28,beam_y,W-29,beam_y+beam_h),fill=STEEL,outline=GUN,width=3)
-d.line([(28,beam_y+5),(W-29,beam_y+5)],fill=(0x9A,0x9F,0xA5),width=2)  # top highlight
-# rivets along the beam
-for rx in range(60,W-40,70):
-    d.ellipse((rx-4,beam_y+beam_h//2-4,rx+4,beam_y+beam_h//2+4),fill=(0x3A,0x3E,0x42),outline=(0x9A,0x9F,0xA5))
-# central riveted WERKZ plate
-pw,ph=150,30; px=W//2-pw//2; py=beam_y+beam_h//2-ph//2
-d.rectangle((px,py,px+pw,py+ph),fill=MACHINE,outline=(0x9A,0x9F,0xA5),width=2)
-for cxp in (px+8,px+pw-8):
-    for cyp in (py+7,py+ph-7): d.ellipse((cxp-3,cyp-3,cxp+3,cyp+3),fill=(0x1A,0x1C,0x1E),outline=STEEL)
-tw=d.textlength('WERKZ',font=font(18,True)); d.text((W//2-tw/2,py+5),'WERKZ',font=font(18,True),fill=CREAM)
+# Task 35: NO beam inside the register — figures stand on the floor, a thin
+# floor line, and the nameplates directly under. The beam is a SEPARATE
+# full-width element in the intro card (crew-beam.png), not part of this frame.
+floor_y = base_y + 2
+d.line([(28, floor_y), (W - 29, floor_y)], fill=KRAFT, width=3) # plain floor line
 
 # nameplates under each figure (kept as-is)
 for (fig,pid,name,title),cx in zip(figs,centers):
-    pw2=250; px2=cx-pw2//2; py2=beam_y+beam_h+12
+    pw2=250; px2=cx-pw2//2; py2=floor_y+14
     d.rectangle((px2,py2,px2+pw2,py2+52),fill=MANILA,outline=GUN,width=2)
     d.text((px2+10,py2+7),name,font=font(17,True),fill=MACHINE)
     d.text((px2+10,py2+30),f'{pid} · {title}',font=font(11),fill=GUN)

@@ -22,3 +22,5 @@ assets-pipeline/sprites/parts-hires/*/_phase-*.png
 # reproducible inputs the cut pipeline uses — keep those, drop the raw candidates.
 assets-pipeline/sprites/clipboard-candidates/*/attempt*.png
 assets-pipeline/sprites/crew-front/
+assets-pipeline/sprites/beam/attempt-*.png
+assets-pipeline/sprites/beam/_ref.png
