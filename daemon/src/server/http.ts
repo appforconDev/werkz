@@ -38,12 +38,13 @@ export interface ServerDeps {
   devMode: boolean;
   onReissuePairing?: () => void; // reprint the QR after a fresh token is issued
   onWorkOrder?: (directive: string) => { ok: boolean; error?: string };
+  onApproveFiling?: () => { ok: boolean; error?: string }; // Form 22-C commit+push (task 38)
   getPreflight?: () => Preflight; // startup diagnostics, exposed to the phone (task 13 B)
   log?: (msg: string) => void;
 }
 
 export function createDaemonServer({
-  service, pairing, devMode, onReissuePairing, onWorkOrder, getPreflight, log = () => {},
+  service, pairing, devMode, onReissuePairing, onWorkOrder, onApproveFiling, getPreflight, log = () => {},
 }: ServerDeps): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
@@ -107,7 +108,7 @@ export function createDaemonServer({
     }
 
     // --- Phone-facing (require session token) ---
-    const phonePaths = new Set(['/pending', '/status', '/release', '/unpair', '/work-order', '/preflight']);
+    const phonePaths = new Set(['/pending', '/status', '/release', '/unpair', '/work-order', '/filing/approve', '/preflight']);
     if (phonePaths.has(path)) {
       const token = tokenFrom(req, url);
       if (!pairing.verify(token)) return json(res, 401, { error: 'unpaired — POST /pair first' });
@@ -150,6 +151,13 @@ export function createDaemonServer({
         const body = safeParse(await readBody(req));
         const directive = typeof body.directive === 'string' ? body.directive : '';
         const result = onWorkOrder?.(directive) ?? { ok: false, error: 'work orders unavailable' };
+        return json(res, result.ok ? 200 : 409, result);
+      }
+      // Form 22-C APPROVE FILING (task 38, right swipe ONLY): commit + push the
+      // completed job's uncommitted changes. Push happens nowhere else. A failed
+      // push returns its reason; the changes stay put.
+      if (req.method === 'POST' && path === '/filing/approve') {
+        const result = onApproveFiling?.() ?? { ok: false, error: 'no filing available' };
         return json(res, result.ok ? 200 : 409, result);
       }
     }

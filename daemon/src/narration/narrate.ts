@@ -60,8 +60,22 @@ export function narrateWithClaude(
   claudePath: string | null,
   spawner: Spawner = spawn,
 ): Promise<string | null> {
+  return promptClaudeLine(`${SYSTEM}\n\nEvent: ${factsFor(input)}`, claudePath, spawner);
+}
+
+/**
+ * Shared one-shot Haiku spawn (task 32/38): `<claude> -p <prompt> --model
+ * claude-haiku-4-5 --output-format text`. Returns the trimmed output, or null on
+ * ANY failure (no binary, spawn error, non-zero exit, plan limit, timeout) — the
+ * caller degrades gracefully. Never throws. Used by narration AND the Form 22-C
+ * diff summary.
+ */
+export function promptClaudeLine(
+  prompt: string,
+  claudePath: string | null,
+  spawner: Spawner = spawn,
+): Promise<string | null> {
   if (!claudePath) return Promise.resolve(null);
-  const prompt = `${SYSTEM}\n\nEvent: ${factsFor(input)}`;
   return new Promise((resolve) => {
     let done = false;
     const finish = (v: string | null) => {

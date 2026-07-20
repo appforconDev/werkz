@@ -166,6 +166,7 @@ const server = createDaemonServer({
   devMode,
   onReissuePairing: reissuePairing,
   onWorkOrder: (directive) => workOrders.dispatch(directive),
+  onApproveFiling: () => workOrders.approveFiling(), // Form 22-C commit+push (task 38)
   getPreflight,
   log: (m) => console.log(`  · ${m}`),
 });

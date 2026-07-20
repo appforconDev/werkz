@@ -16,6 +16,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import type { EventBus } from '../events/bus.ts';
 import { buildEvent } from '../adapter/cc/index.ts';
+import { detectDirty, summarizeDiff, approveFiling, realGit, type GitRunner, type ApproveResult } from './completion-filing.ts';
 
 export interface DispatchResult {
   ok: boolean;
@@ -51,6 +52,12 @@ export class WorkOrderManager {
   #child: ChildProcess | null = null;
   #settled = false; // guards the terminal-event-once invariant
   #log: (m: string) => void;
+  #git: GitRunner;
+  // Form 22-C (task 38): the last completed job's filing summary, used as the
+  // commit message when the operator right-swipes APPROVE. Null when the tree was
+  // clean or nothing is pending.
+  #pendingFiling: { summary: string | null } | null = null;
+  #quietFilingLogged = false;
 
   constructor(
     projectDir: string,
@@ -58,12 +65,14 @@ export class WorkOrderManager {
     bus: EventBus,
     log: (m: string) => void = () => {},
     claudePath: string | null = null,
+    git: GitRunner = realGit,
   ) {
     this.#projectDir = projectDir;
     this.#projectId = projectId;
     this.#bus = bus;
     this.#log = log;
     this.#claudePath = claudePath;
+    this.#git = git;
   }
 
   get busy(): boolean {
@@ -127,12 +136,28 @@ export class WorkOrderManager {
             report = capReport(parsed.result.trim());
           }
         } catch { /* not json */ }
-        this.#settle('job.completed', 'info', {
+        // Form 22-C (task 38): if the job left uncommitted changes, the filing
+        // (files + --stat) rides on job.completed INSTANTLY (git is sync); the
+        // dry Haiku diff summary follows async as `filing.summary` so completion
+        // is never delayed by the spawn. Both survive replay.
+        this.#pendingFiling = null;
+        let filing: object | undefined;
+        let jobEventId: string | undefined;
+        try {
+          const dirty = detectDirty(this.#projectDir, this.#git);
+          if (dirty) {
+            filing = { files: dirty.files, fileCount: dirty.fileCount, stat: dirty.stat };
+            this.#pendingFiling = { summary: null };
+          }
+        } catch { /* git unavailable → no card, never blocks the filing */ }
+        jobEventId = this.#settle('job.completed', 'info', {
           source: 'work-order', ok: true,
           ...(turns !== undefined ? { turns } : {}),
           ...(report !== undefined ? { report } : {}),
+          ...(filing ? { filing } : {}),
         });
-        this.#log(`work order finished (exit 0${report ? `, report ${report.length} chars` : ', no report text'})`);
+        this.#log(`work order finished (exit 0${report ? `, report ${report.length} chars` : ', no report text'}${filing ? ', 22-C: uncommitted changes' : ''})`);
+        if (filing && jobEventId) void this.#summarizeFiling(jobEventId);
       } else {
         this.#fail('nonzero-exit', gameSafeDetail(err) || `exited with code ${code ?? 'unknown'}`, code ?? undefined);
         this.#log(`work order FAILED (exit ${code ?? '?'})`);
@@ -155,18 +180,52 @@ export class WorkOrderManager {
   }
 
   // Emit the ONE terminal event for this job and release the slot. Idempotent:
-  // if both 'error' and 'exit' somehow fire, only the first is honored.
-  #settle(eventType: string, severity: 'info' | 'attention', payload: object): void {
-    if (this.#settled) return;
+  // if both 'error' and 'exit' somehow fire, only the first is honored. Returns
+  // the emitted event's id (or undefined if already settled) so the async filing
+  // summary can reference it.
+  #settle(eventType: string, severity: 'info' | 'attention', payload: object): string | undefined {
+    if (this.#settled) return undefined;
     this.#settled = true;
     this.#child = null;
-    this.#emit(eventType, severity, payload);
+    return this.#emit(eventType, severity, payload);
   }
 
-  #emit(eventType: string, severity: 'info' | 'attention', payload: object): void {
-    this.#bus.emit(buildEvent({
+  #emit(eventType: string, severity: 'info' | 'attention', payload: object): string {
+    const ev = buildEvent({
       sessionId: 'work-order', projectId: this.#projectId, workerId: 'WX-9B72',
       eventType, severity, payload,
-    }));
+    });
+    this.#bus.emit(ev);
+    return ev.eventId;
+  }
+
+  // Async: the dry Haiku diff summary → `filing.summary` (referencing the job's
+  // completion event). Graceful: no claude / plan limit / timeout ⇒ no event, the
+  // card keeps its raw --stat, logged ONCE dry. Never blocks the filing.
+  async #summarizeFiling(jobEventId: string): Promise<void> {
+    let summary: string | null = null;
+    try {
+      summary = await summarizeDiff(this.#projectDir, this.#git, this.#claudePath);
+    } catch { summary = null; }
+    if (this.#pendingFiling) this.#pendingFiling.summary = summary; // used as the commit message
+    if (summary) {
+      this.#emit('filing.summary', 'info', { refEventId: jobEventId, text: summary });
+    } else if (!this.#quietFilingLogged) {
+      this.#quietFilingLogged = true;
+      this.#log('22-C: no diff summary (claude quiet) — card shows the raw --stat');
+    }
+  }
+
+  /**
+   * APPROVE FILING (task 38, right swipe): commit + push the uncommitted changes,
+   * with the pending Haiku summary as the (Werkz-prefixed) commit message. Push
+   * happens ONLY here — never auto, never on trust. Returns a loud reason on any
+   * failure; the changes stay put. .werkz/ is excluded by its own .gitignore
+   * (task 37 A), so credentials never ride along.
+   */
+  approveFiling(): ApproveResult {
+    const res = approveFiling(this.#projectDir, this.#pendingFiling?.summary ?? null, this.#git);
+    if (res.ok) this.#pendingFiling = null;
+    return res;
   }
 }
