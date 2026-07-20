@@ -90,6 +90,29 @@ class WorkOrderStatus {
   const WorkOrderStatus({this.phase = WorkOrderPhase.idle, this.reason, this.turns, this.report, this.completedEventId});
 }
 
+// Task 38: Form 22-C — a completed job left uncommitted changes. The operator
+// gets a swipe card: right = commit+push, left = hold. LIVE-only (like the report
+// card, task 16 B); the changes stay on the machine until decided. [summary] is
+// the dry Haiku diff line (arrives via a follow-up filing.summary event; null
+// until then / when claude was quiet — the card shows the raw --stat instead).
+class CompletionFiling {
+  final String jobEventId;
+  final List<String> files;
+  final int fileCount; // real total (files may be capped)
+  final String stat;
+  final String? summary;
+  const CompletionFiling({
+    required this.jobEventId,
+    required this.files,
+    required this.fileCount,
+    required this.stat,
+    this.summary,
+  });
+
+  CompletionFiling withSummary(String s) => CompletionFiling(
+      jobEventId: jobEventId, files: files, fileCount: fileCount, stat: stat, summary: s);
+}
+
 // Task 26 E: the latest UNREAD completion report — surfaced as a filed-document
 // card in the workshop view (one tap to open, cleared on read). LIVE-only, like
 // the banner (task 16 B: replay never resurrects attention UI); the LOG stays
@@ -119,6 +142,8 @@ class WorkshopState {
   final ConnStats connStats;
   // Latest unread completion report (task 26 E) — null once read.
   final UnreadReport? unreadReport;
+  // Form 22-C pending completion filing (task 38) — null when none / decided.
+  final CompletionFiling? pendingFiling;
 
   const WorkshopState({
     this.conn = ConnState.disconnected,
@@ -132,6 +157,7 @@ class WorkshopState {
     this.unreachable = false,
     this.connStats = const ConnStats(),
     this.unreadReport,
+    this.pendingFiling,
   });
 
   WorkshopState copyWith({
@@ -147,6 +173,8 @@ class WorkshopState {
     ConnStats? connStats,
     UnreadReport? unreadReport,
     bool clearUnreadReport = false,
+    CompletionFiling? pendingFiling,
+    bool clearPendingFiling = false,
   }) =>
       WorkshopState(
         conn: conn ?? this.conn,
@@ -160,6 +188,7 @@ class WorkshopState {
         unreachable: unreachable ?? this.unreachable,
         connStats: connStats ?? this.connStats,
         unreadReport: clearUnreadReport ? null : (unreadReport ?? this.unreadReport),
+        pendingFiling: clearPendingFiling ? null : (pendingFiling ?? this.pendingFiling),
       );
 
   PendingDecision? get topDecision => pending.isEmpty ? null : pending.first;
@@ -258,6 +287,22 @@ class WorkshopController extends Notifier<WorkshopState> {
       return;
     }
 
+    // Form 22-C (task 38): the dry Haiku diff summary follows the completion as a
+    // separate event — merge it into the pending filing (and the narration map so
+    // the LOG line reads it too). Applies on replay AND live.
+    if (e.eventType == 'filing.summary') {
+      final ref = e.payload['refEventId'] as String?;
+      final text = e.payload['text'] as String?;
+      if (ref != null && text != null) {
+        state = state.copyWith(narration: {...state.narration, ref: text});
+        final f = state.pendingFiling;
+        if (f != null && f.jobEventId == ref) {
+          state = state.copyWith(pendingFiling: f.withSummary(text));
+        }
+      }
+      return;
+    }
+
     final feed = [...state.feed, e];
     if (feed.length > _feedCap) feed.removeRange(0, feed.length - _feedCap);
 
@@ -275,6 +320,7 @@ class WorkshopController extends Notifier<WorkshopState> {
     var mode = state.permissionMode;
     var workOrder = state.workOrder;
     UnreadReport? unread;
+    CompletionFiling? filing;
 
     switch (e.eventType) {
       case 'worker.dispatched':
@@ -294,6 +340,17 @@ class WorkshopController extends Notifier<WorkshopState> {
         // the workshop view — it outlives the toast's 2.5s self-dismiss.
         if (rep != null) {
           unread = UnreadReport(report: rep, eventId: e.eventId, turns: e.payload['turns'] as int?);
+        }
+        // Task 38: a live completion that left uncommitted changes raises the
+        // Form 22-C swipe card (summary may follow via filing.summary).
+        final fp = e.payload['filing'];
+        if (fp is Map) {
+          filing = CompletionFiling(
+            jobEventId: e.eventId,
+            files: ((fp['files'] as List?) ?? const []).map((x) => x.toString()).toList(),
+            fileCount: (fp['fileCount'] as int?) ?? ((fp['files'] as List?)?.length ?? 0),
+            stat: fp['stat'] as String? ?? '',
+          );
         }
         break;
       case 'job.failed':
@@ -327,7 +384,7 @@ class WorkshopController extends Notifier<WorkshopState> {
     }
     state = state.copyWith(
         feed: feed, pending: pending, autopilot: autopilot, permissionMode: mode, workOrder: workOrder,
-        unreadReport: unread);
+        unreadReport: unread, pendingFiling: filing);
   }
 
   /// The unread report was opened (card or toast) — clear the badge (task 26 E).
@@ -335,6 +392,44 @@ class WorkshopController extends Notifier<WorkshopState> {
     if (_disposed) return;
     state = state.copyWith(clearUnreadReport: true);
   }
+
+  /// Form 22-C APPROVE (right swipe, task 38): tell the daemon to commit + push
+  /// the completed job's uncommitted changes. Returns (ok, error?). On success
+  /// the card clears and a FILED line goes to the LOG; on failure the card stays
+  /// and the loud reason is shown — the changes are never touched silently.
+  Future<(bool, String?)> approveFiling() async {
+    final c = _client;
+    final f = state.pendingFiling;
+    if (c == null || f == null) return (false, 'not connected');
+    final (ok, err) = await c.approveFiling();
+    if (_disposed) return (ok, err);
+    if (ok) {
+      state = state.copyWith(
+        clearPendingFiling: true,
+        feed: [...state.feed, _localLog('completion.filed', 'FORM 22-C filed — changes committed + pushed (${f.fileCount} files)')],
+      );
+    }
+    return (ok, err);
+  }
+
+  /// Form 22-C HOLD (left swipe / timeout, task 38): no commit; the changes stay
+  /// on the machine and the decision is logged in the LOG as HELD.
+  void holdFiling() {
+    if (_disposed) return;
+    final f = state.pendingFiling;
+    if (f == null) return;
+    state = state.copyWith(
+      clearPendingFiling: true,
+      feed: [...state.feed, _localLog('completion.held', 'FORM 22-C HELD — ${f.fileCount} uncommitted file(s) left on the machine')],
+    );
+  }
+
+  // A synthetic local LOG line (not from the daemon) — for filing outcomes.
+  WerkzEvent _localLog(String type, String text) => WerkzEvent(
+      eventId: 'local-${DateTime.now().microsecondsSinceEpoch}',
+      timestamp: DateTime.now().toIso8601String(),
+      eventType: type, severity: 'info', workerId: null,
+      payload: {'localText': text});
 
   /// Release the top decision; optimistically remove it from the queue.
   void decide(String decisionId, String decision) {

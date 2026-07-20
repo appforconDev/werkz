@@ -16,6 +16,7 @@ import 'pairing_screen.dart';
 import 'settings_screen.dart';
 import 'work_order_sheet.dart';
 import 'widgets/layout_tuning_panel.dart';
+import 'widgets/completion_filing_card.dart';
 import 'widgets/requisition_overlay.dart';
 import 'widgets/stacked_workshop.dart';
 import 'widgets/work_report_sheet.dart';
@@ -237,6 +238,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               decision: top,
               reducedEffects: reduced,
               onDecide: (decision) => ref.read(workshopProvider.notifier).decide(top.decisionId, decision),
+            ),
+          // Form 22-C (task 38): a completed job left uncommitted changes → a
+          // swipe card near the bottom (a requisition, not a git client). Right =
+          // commit+push, left = hold. Shown only when no decision overlay is up.
+          if (ws.pendingFiling != null && !showOverlay)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 74 + MediaQuery.of(context).viewPadding.bottom,
+              child: CompletionFilingCard(
+                key: ValueKey('form22c-${ws.pendingFiling!.jobEventId}'),
+                filing: ws.pendingFiling!,
+                onApprove: () => ref.read(workshopProvider.notifier).approveFiling(),
+                onHold: () => ref.read(workshopProvider.notifier).holdFiling(),
+              ),
             ),
         ],
       ),

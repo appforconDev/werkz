@@ -5,6 +5,9 @@ import '../models/werkz_event.dart';
 // Never surfaces raw repo strings (§4.3) — only categories from the payload.
 String narrate(WerkzEvent e) {
   final p = e.payload;
+  // Task 38: synthetic local LOG lines (filing outcomes) carry their own text.
+  final local = p['localText'] as String?;
+  if (local != null) return local;
   final room = p['room'] as String?;
   final tool = p['toolCategory'] as String?;
   switch (e.eventType) {

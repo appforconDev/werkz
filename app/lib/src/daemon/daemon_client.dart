@@ -170,6 +170,24 @@ class DaemonClient {
   // (task 30 E: setNarrationKey / narrationKeyStatus removed — narration is
   // keyless now; the daemon spawns the user's own `claude`.)
 
+  // Test seam (task 38): stub the approve-filing network call in widget tests.
+  static Future<(bool, String?)> Function()? approveFilingOverride;
+
+  /// Form 22-C APPROVE (task 38): tell the daemon to commit + push the completed
+  /// job's uncommitted changes. Returns (ok, error?) — the error is the loud git
+  /// reason (no remote / auth / conflict), shown on the phone; changes stay put.
+  Future<(bool, String?)> approveFiling() async {
+    if (approveFilingOverride != null) return approveFilingOverride!();
+    try {
+      final res = await http.post(Uri.parse('${payload.httpBase}/filing/approve'), headers: _authHeaders);
+      if (res.statusCode == 200) return (true, null);
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      return (false, j['error'] as String? ?? 'filing failed');
+    } catch (_) {
+      return (false, 'workshop offline — the filing was not pushed');
+    }
+  }
+
   /// File a work order — one directive → one headless job. Returns (ok, error?).
   Future<(bool, String?)> fileWorkOrder(String directive) async {
     try {
