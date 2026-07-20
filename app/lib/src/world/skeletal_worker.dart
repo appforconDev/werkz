@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flame/flame.dart';
 import '../models/werkz_event.dart';
 import 'rig_manifest.dart';
+import 'room_registry.dart' show Workstation;
 import 'wander.dart';
 import 'worker_animations.dart';
 import 'worker_sprite.dart';
@@ -126,6 +127,10 @@ class SkeletalWorker extends PositionComponent {
   /// The POIs of the room this worker is currently rendered in (task 20c), set by
   /// the mount. Empty ⇒ no wander (e.g. the advisor close-up).
   List<Poi> pois = const [];
+
+  /// The room's workstations (task 30), set by the mount. A worker entering
+  /// work-typing walks to the nearest desk and faces it; empty ⇒ type in place.
+  List<Workstation> desks = const [];
 
   /// Per-persona reading offsets (task 19l), EXPOSED not silent: [heightScale]
   /// multiplies the shared workerHeightPx so a tall-thin persona reads taller and
@@ -394,15 +399,28 @@ class SkeletalWorker extends PositionComponent {
           case ForcedSkelState.coffeeIdle:
             animState = WorkerState.maintenance;
         }
+        // Task 30: work happens AT a workstation. A working worker walks to the
+        // nearest desk (front plane) and faces it, then types there. Rooms with
+        // no desk in the registry keep the old in-place target — no invented
+        // furniture. deskFacing is applied on ARRIVAL so the walk still faces
+        // its direction of travel.
+        bool? deskFacing;
+        if (animState == WorkerState.working && desks.isNotEmpty && _gameWidth > 0) {
+          final xf = _x / _gameWidth;
+          final d = desks.reduce((a, b) => (a.x - xf).abs() <= (b.x - xf).abs() ? a : b);
+          moveTarget = d.x * _gameWidth;
+          deskFacing = d.facingRight;
+        }
         var moving = false;
         if (moveTarget != null) {
           moving = (moveTarget - _x).abs() > 0.5;
           if (moving) _facingRight = moveTarget > _x;
-          // State walks (to the work site etc.) run at the errand pace when a
-          // job is active; forced/ambient walks read the base (errandPx == walkPx
-          // when onErrand is false — patrol/idle mounts never set it).
+          // State walks (to the work site etc.) run at the errand pace when
+          // engaged; ambient walks read the base (errandPx == walkPx when
+          // onErrand is false — wander/coffee/return-home mounts never set it).
           _x = stepToward(_x, moveTarget, errandPx, dt);
           urgent = moving && onErrand;
+          if (!moving && deskFacing != null) _facingRight = deskFacing; // face the desk on arrival
           if (!moving && forced == ForcedSkelState.walkLoop) _patrolRight = !_patrolRight;
         }
         final carrying = animState == WorkerState.carrying;

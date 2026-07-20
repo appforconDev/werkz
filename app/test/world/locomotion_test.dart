@@ -120,13 +120,17 @@ void main() {
           reason: 'errand pace = dispatchSpeedFactor over the same second');
     });
 
-    test('idle arms HOLD plain vertical — no swing, no bias (task 28/29)', () {
+    test('idle arms sway symmetrically about vertical (task 28→30)', () {
       const p = SkelParams();
-      for (var t = 0.0; t <= 4.0; t += 0.25) {
+      var maxA = -1e9, minA = 1e9;
+      for (var t = 0.0; t <= 20.0; t += 0.05) {
         final pose = animatePose(WorkerAnim.idle, t, p);
-        expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: 'near arm must rest at vertical (t=$t)');
-        expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: 'far arm must rest at vertical (t=$t)');
+        final a = pose.angles['arm-upper']!;
+        expect(pose.angles['arm-upper-far']!, a, reason: 'both arms sway together (t=$t)');
+        maxA = a > maxA ? a : maxA; minA = a < minA ? a : minA;
       }
+      expect(maxA, closeTo(-minA, 2e-3), reason: 'centered on vertical — no directional bias');
+      expect(maxA, closeTo(p.idleSway, 2e-3));
     });
 
     test('tuned defaults (20b-fix-2 device pass)', () {

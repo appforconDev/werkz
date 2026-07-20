@@ -201,16 +201,18 @@ void main() {
           reason: 'full wander cycle not observed within 300 simulated seconds');
       expect(stripSaved, isTrue);
 
-      // Joint-space lock (task 29): stationary shoulders are EXACTLY vertical —
-      // equality to the rest pose, not a directional bias; identical across
-      // personas and constant over the whole cycle. The strips + red pivot
-      // guide document the look in both facings.
+      // Joint-space lock (task 29→30): stationary shoulders sway SYMMETRICALLY
+      // about vertical — forward excursion == backward, both arms together. The
+      // strips + red pivot guide document the centered look in both facings.
       for (final anim in [WorkerAnim.idle, WorkerAnim.coffeeIdle]) {
-        for (var t = 0.0; t <= 5.0; t += 0.25) {
+        var maxA = -1e9, minA = 1e9;
+        for (var t = 0.0; t <= 20.0; t += 0.05) {
           final pose = animatePose(anim, t, const SkelParams());
-          expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: '$persona $anim near arm off vertical at t=$t');
-          expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: '$persona $anim far arm off vertical at t=$t');
+          final a = pose.angles['arm-upper']!;
+          expect(pose.angles['arm-upper-far']!, a, reason: '$persona $anim: arms sway together at t=$t');
+          maxA = a > maxA ? a : maxA; minA = a < minA ? a : minA;
         }
+        expect(maxA, closeTo(-minA, 2e-3), reason: '$persona $anim: sway centered on vertical');
       }
     });
   }

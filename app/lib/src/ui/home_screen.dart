@@ -33,6 +33,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _ready = false; // show ambient first, then present a pending decision
   String? _lastSeenEventId; // newest log entry the user has seen (unread dot)
   Timer? _woDismiss; // auto-dismiss timer for a COMPLETED work-order banner
+  Timer? _pairPromptTimer; // task 30 D: one-shot "pair now?" check after launch
+  bool _pairPrompted = false; // shown once per cold launch — never nag on blips
 
   @override
   void initState() {
@@ -40,11 +42,46 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     Timer(const Duration(milliseconds: 500), () {
       if (mounted) setState(() => _ready = true);
     });
+    // Task 30 D: if the workshop is still not connected ~5s after a cold launch,
+    // offer to pair — ONCE. A reconnect blip after this never re-prompts.
+    _pairPromptTimer = Timer(const Duration(seconds: 5), _maybePromptPair);
+  }
+
+  void _maybePromptPair() {
+    if (!mounted || _pairPrompted) return;
+    final ws = ref.read(workshopProvider);
+    if (ws.conn == ConnState.connected) return; // connected → never shown
+    _pairPrompted = true;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Werkz.cream,
+        title: const Text('WORKSHOP NOT CONNECTED',
+            style: TextStyle(fontFamily: Werkz.mono, fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 1)),
+        content: const Text('No workshop is answering on this network. Pair now by scanning the QR '
+            'from `werkz qr` on your computer?',
+            style: TextStyle(fontFamily: Werkz.mono, fontSize: 12, color: Werkz.machine)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('LATER', style: TextStyle(fontFamily: Werkz.mono, color: Werkz.gunmetal)),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PairingScreen()));
+            },
+            child: const Text('SCAN QR', style: TextStyle(fontFamily: Werkz.mono)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
     _woDismiss?.cancel();
+    _pairPromptTimer?.cancel();
     super.dispose();
   }
 

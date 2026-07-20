@@ -46,34 +46,48 @@ void main() {
     expect(scaled.h, const SkelParams().workerHeightPx);
   });
 
-  test('stationary arms are PLAIN VERTICAL — exactly 0, no bias, no sway (task 29)', () {
-    // Closing the 23→25→26→28 stationary-arm family (Rickard's call): every
-    // standing state poses BOTH shoulders at exactly 0 (the authored rest),
-    // identical across personas, constant across the cycle. Boring is the fix.
+  test('stationary arm sway is a SYMMETRIC envelope about vertical (task 30 B)', () {
+    // Task 30 reintroduces a small idle sway — but CENTERED on 0, so max forward
+    // excursion == max backward excursion. Centered symmetry is structurally
+    // immune to the 23→29 "behind the back" class: there is no bias to get wrong.
     const p = SkelParams();
     for (final anim in [WorkerAnim.idle, WorkerAnim.coffeeIdle]) {
-      for (var t = 0.0; t <= 5.0; t += 0.1) {
+      var maxA = -1e9, minA = 1e9, maxF = -1e9, minF = 1e9;
+      for (var t = 0.0; t <= 20.0; t += 0.05) {
         final pose = animatePose(anim, t, p);
-        expect(pose.angles['arm-upper'], isNotNull);
-        expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: '$anim near arm off vertical at t=$t');
-        expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: '$anim far arm off vertical at t=$t');
+        final a = pose.angles['arm-upper']!, f = pose.angles['arm-upper-far']!;
+        expect(a, f, reason: '$anim: both arms sway together at t=$t');
+        maxA = a > maxA ? a : maxA; minA = a < minA ? a : minA;
+        maxF = f > maxF ? f : maxF; minF = f < minF ? f : minF;
+      }
+      expect(maxA, closeTo(-minA, 2e-3), reason: '$anim near: forward excursion == backward');
+      expect(maxF, closeTo(-minF, 2e-3), reason: '$anim far: forward excursion == backward');
+      expect(maxA, closeTo(p.idleSway, 2e-3), reason: '$anim amplitude == idleSway');
+      expect(maxA, lessThanOrEqualTo(0.20), reason: '$anim small amplitude cap');
+    }
+  });
+
+  test('idleSway = 0 pins stationary arms to exact vertical (task 30 B)', () {
+    // The symmetric sway is tunable to nothing → the task-29 dead-still rest.
+    const p = SkelParams(idleSway: 0);
+    for (final anim in [WorkerAnim.idle, WorkerAnim.coffeeIdle]) {
+      for (var t = 0.0; t <= 5.0; t += 0.25) {
+        final pose = animatePose(anim, t, p);
+        expect(pose.angles['arm-upper']!, closeTo(0, 1e-9), reason: '$anim near off vertical at t=$t');
+        expect(pose.angles['arm-upper-far']!, closeTo(0, 1e-9), reason: '$anim far off vertical at t=$t');
       }
     }
   });
 
-  test('NO stationary anim leaves the far shoulder at the authored hang (26)', () {
-    // The 23/25/26 bug class: an animation that omits a shoulder resets it to 0
-    // = the art's behind-vertical hang. Every stationary animation must place
-    // BOTH shoulders explicitly, and the far one never behind the back.
+  test('every stationary anim places BOTH shoulders explicitly (task 26/30)', () {
+    // The 23/25/26 bug class: an animation that OMITS a shoulder resets it to 0.
+    // Every stationary animation must place both (idle/coffee to the sway, typing
+    // to its reach) — never leave one to fall to the default.
     const p = SkelParams();
     for (final anim in [WorkerAnim.idle, WorkerAnim.workTyping, WorkerAnim.coffeeIdle]) {
-      for (var t = 0.0; t <= 5.0; t += 0.5) {
-        final pose = animatePose(anim, t, p);
-        expect(pose.angles.containsKey('arm-upper'), isTrue, reason: '$anim must place the near shoulder');
-        expect(pose.angles.containsKey('arm-upper-far'), isTrue, reason: '$anim must place the far shoulder');
-        // Typing keeps its reach (motion); stationary states rest at vertical.
-        expect(pose.angles['arm-upper-far']!, lessThanOrEqualTo(0), reason: '$anim far arm behind the back at t=$t');
-      }
+      final pose = animatePose(anim, 1.0, p);
+      expect(pose.angles.containsKey('arm-upper'), isTrue, reason: '$anim must place the near shoulder');
+      expect(pose.angles.containsKey('arm-upper-far'), isTrue, reason: '$anim must place the far shoulder');
     }
   });
 

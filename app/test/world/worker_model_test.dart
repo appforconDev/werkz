@@ -30,7 +30,51 @@ WorkerModelState feed(WorkerModelState st, List<WerkzEvent> events, {List<String
   return s;
 }
 
+// Task 30 A: the EXACT rule the WorkerLayer mount uses to set a worker's
+// dispatch-urgency flag (worker_layer: `w.status == working || walking`). Tested
+// here against the model so the mount-level divergence class (28 passed the
+// skeletal function but the mount fed it the wrong flag) can't reopen.
+bool mountErrand(WorkerAgent w) =>
+    w.status == WorkerStatus.working || w.status == WorkerStatus.walking;
+
 void main() {
+  group('dispatch urgency derives from engaged status, not jobId (task 30 A)', () {
+    test('a dispatched work order → assigned worker is on an errand', () {
+      var st = WorkerModelState.initial();
+      st = feed(st, [ev('worker.dispatched', room: 'workshop-floor', source: 'work-order')]);
+      final w = st.workers.firstWhere((w) => w.jobId != null);
+      expect(w.status, WorkerStatus.working);
+      expect(mountErrand(w), isTrue, reason: 'working → dispatch-urgency pace');
+    });
+
+    test('the PRIMARY worker doing interactive (jobId-less) work is STILL on an errand', () {
+      // The 28 bug: interactive activity routes to the primary with NO jobId
+      // (documented 20a limit). Keying urgency off jobId meant the most-watched
+      // worker never sped up. Status is working → errand, regardless of jobId.
+      var st = WorkerModelState.initial();
+      st = feed(st, [ev('task.started', room: 'workshop-floor')]); // no jobId, no source
+      final primary = st.forPersona(kPrimaryPersona)!;
+      expect(primary.jobId, isNull, reason: 'documented: interactive activity has no jobId');
+      expect(primary.status, WorkerStatus.working);
+      expect(mountErrand(primary), isTrue, reason: 'the fix: engaged status, not jobId');
+    });
+
+    test('idle and coffee (wander / return-home) are NOT errands', () {
+      var st = WorkerModelState.initial();
+      final idle = st.forPersona(kPrimaryPersona)!;
+      expect(idle.status, WorkerStatus.idle);
+      expect(mountErrand(idle), isFalse);
+      // After a job ends the worker winds down over coffee → ambient pace.
+      st = feed(st, [
+        ev('job.assigned', jobId: 'j1', room: 'workshop-floor'),
+        ev('job.completed', jobId: 'j1', room: 'workshop-floor'),
+      ]);
+      final done = st.forJob('j1') ?? st.workers.firstWhere((w) => w.status == WorkerStatus.coffee);
+      expect(done.status, WorkerStatus.coffee);
+      expect(mountErrand(done), isFalse, reason: 'return-home over coffee is ambient');
+    });
+  });
+
   group('assignment', () {
     test('round-robin hands successive jobs to distinct idle workers', () {
       var st = WorkerModelState.initial();

@@ -60,6 +60,11 @@ class SkelParams {
   final double backScale;
   final double wanderEverySec;
   final double dwellSec;
+  // Idle arm sway (task 30, Rickard's call): a small SYMMETRIC sway about exactly
+  // vertical (0) for stationary states — max forward excursion == max backward
+  // excursion == this amplitude (rad). Centered symmetry is structurally immune
+  // to the old "behind the back" class (23→29): there is no bias to get wrong.
+  final double idleSway;
   // Dispatch urgency (task 28, Rickard's number): a worker ON AN ERRAND (active
   // job — walk to site, job-route transit legs) moves at this multiple of the
   // single walkSpeedPx source. A LENS like the room factor — multipliers
@@ -84,6 +89,7 @@ class SkelParams {
     this.backScale = 0.78, // back-of-room scale (task 20c)
     this.wanderEverySec = 40, // → a lazy ~20–60 s random rest interval
     this.dwellSec = 4,
+    this.idleSway = 0.05, // task 30: ±rad symmetric idle arm sway (Rickard tunes)
     this.dispatchSpeedFactor = 1.20, // task 28: Rickard's urgency multiple
   });
 
@@ -104,6 +110,7 @@ class SkelParams {
           double? backScale,
           double? wanderEverySec,
           double? dwellSec,
+          double? idleSway,
           double? dispatchSpeedFactor}) =>
       SkelParams(
         walkHz: walkHz ?? this.walkHz,
@@ -119,6 +126,7 @@ class SkelParams {
         backScale: backScale ?? this.backScale,
         wanderEverySec: wanderEverySec ?? this.wanderEverySec,
         dwellSec: dwellSec ?? this.dwellSec,
+        idleSway: idleSway ?? this.idleSway,
         dispatchSpeedFactor: dispatchSpeedFactor ?? this.dispatchSpeedFactor,
       );
 }
@@ -154,14 +162,13 @@ double _sin(double x) => math.sin(x);
 const double _kneeLock = 0.0; // leg-lower — straight shin
 const double _elbowLock = 0.0; // arm-lower — straight forearm
 
-// Task 29 (Rickard's call, closing the four-round stationary-arm family
-// 23→25→26→28): standing arms are a PLAIN VERTICAL REST — both shoulders at
-// exactly 0 in every stationary state, no per-persona bias, no sway; identical
-// across personas. Life while standing comes from the head nod, torso rock and
-// body bob ONLY. Deliberately boring — boring is the fix. Walk/type keep their
-// motion; nothing else moves an arm on a planted worker (locked by tests + the
-// equality-to-vertical harness check, both facings).
-const double _armRest = 0.0; // straight down — the authored bind hang, untouched
+// Stationary arms (task 29→30). The authored rest is straight down (0). Task 30
+// reintroduces a SMALL SYMMETRIC sway about that 0 (±idleSway) — centered
+// symmetry is structurally immune to the 23→29 "behind the back" bug class
+// because there is no directional bias to get wrong: the arm swings equally
+// forward and back of vertical. Both arms move together; walk/type keep their
+// own motion.
+double _idleSway(double sway, double t) => sway * _sin(2 * math.pi * 0.18 * t);
 
 /// Compute the pose for [anim] at time [t] (seconds) with params [p]. The sprite
 /// is authored LEFT-FACING; facing is handled by a whole-sprite mirror at the
@@ -171,10 +178,11 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p) {
   switch (anim) {
     case WorkerAnim.idle:
       final b = _sin(2 * math.pi * 0.25 * t); // ambient rate halved (19i)
+      final sway = _idleSway(p.idleSway, t); // symmetric about 0 (task 30)
       return Pose({
         'head': p.headBob * b * 0.5,
         'torso': 0.01 * b,
-        'arm-upper': _armRest, 'arm-upper-far': _armRest,
+        'arm-upper': sway, 'arm-upper-far': sway,
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'leg-lower': _kneeLock, 'leg-lower-far': _kneeLock,
       }, p.bob * 0.25 * b);
@@ -210,12 +218,11 @@ Pose animatePose(WorkerAnim anim, double t, SkelParams p) {
 
     case WorkerAnim.coffeeIdle:
       final b = _sin(2 * math.pi * 0.2 * t); // ambient rate halved (19i)
-      // Task 29: coffee is a STATIONARY state — both shoulders at plain
-      // vertical rest like every stander (the raised sip arm is retired with
-      // the rest of the standing-arm motion; the head/torso/bob carry the
-      // wind-down read).
+      // Coffee is a STATIONARY state — same symmetric idle sway about vertical
+      // (task 29 retired the raised sip arm; task 30 gives it the gentle sway).
+      final sway = _idleSway(p.idleSway, t);
       return Pose({
-        'arm-upper': _armRest, 'arm-upper-far': _armRest,
+        'arm-upper': sway, 'arm-upper-far': sway,
         'arm-lower': _elbowLock, 'arm-lower-far': _elbowLock,
         'head': p.headBob * b * 0.4 - 0.04,
         'torso': 0.01 * b,

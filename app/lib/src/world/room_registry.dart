@@ -69,6 +69,37 @@ const Map<String, List<Poi>> kRoomPois = {
 
 List<Poi> poisForRoom(String room) => kRoomPois[room] ?? const [];
 
+/// A workstation (task 30): where a worker stands to WORK (type) — the room's
+/// side desks. Distinct from wander POIs (idle drift targets). [x] is across the
+/// band (0..1) on the FRONT plane (work happens up front, in view); [facingRight]
+/// is the arrival facing toward the desk/screen. Registry data, tunable per room.
+class Workstation {
+  final double x;
+  final bool facingRight;
+  const Workstation(this.x, this.facingRight);
+}
+
+/// Front-plane desks per room. A worker entering work-typing walks to the
+/// NEAREST one and faces it. Rooms with no desk here → type in place (the old
+/// behaviour) — no invented furniture where the art has none.
+const Map<String, List<Workstation>> kRoomDesks = {
+  // Workshop side desks: left desk faces left (toward the wall bench), right desk
+  // faces right. Positioned on the flat floor art's clear side zones.
+  'workshop-floor': [
+    Workstation(0.20, false), // left bench — face left
+    Workstation(0.80, true), // right bench — face right
+  ],
+};
+
+List<Workstation> desksForRoom(String room) => kRoomDesks[room] ?? const [];
+
+/// The nearest desk to [x] (0..1) in [room], or null if the room has none.
+Workstation? nearestDesk(String room, double xFrac) {
+  final desks = desksForRoom(room);
+  if (desks.isEmpty) return null;
+  return desks.reduce((a, b) => (a.x - xFrac).abs() <= (b.x - xFrac).abs() ? a : b);
+}
+
 /// The interim building draws only [kRooms]. A canonical room that isn't built yet
 /// (test-workshop, octagon, building) folds to the workshop floor so a worker is
 /// NEVER placed in a storey nothing renders — the root of the 20b vanish

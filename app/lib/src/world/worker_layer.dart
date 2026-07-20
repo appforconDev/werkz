@@ -68,10 +68,16 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
     for (final w in model.workers) {
       final wt = transit[w.personaId];
       final active = wt?.active;
-      // Task 28: an ACTIVE JOB puts the worker on an errand — its walks (and
-      // job-route transit legs) run at the dispatch-urgency pace. Ambient
-      // movement (wander / return-home / patrol) has no jobId → base pace.
-      final urgency = w.jobId != null ? skel.dispatchSpeedFactor : 1.0;
+      // Task 30 (the urgency bug): ON AN ERRAND = the model's ENGAGED status
+      // (working / walking-to-work), NOT jobId. jobId is null for the PRIMARY
+      // worker's interactive activity (documented 20a limitation), so keying
+      // urgency off jobId meant the most-watched worker never sped up — 28's
+      // "zero difference on device". Status is always set, so this is reliable;
+      // ambient states (idle wander, coffee, return-home) stay at base pace.
+      // Derived from the MODEL status even mid-transit (the display status is
+      // forced to walking) so a return-home transit (coffee) is not urgent.
+      final errand = w.status == WorkerStatus.working || w.status == WorkerStatus.walking;
+      final urgency = errand ? skel.dispatchSpeedFactor : 1.0;
       if (active != null) {
         final f = transitFrame(active, params,
             skel.walkSpeedPx * walkOf(active.fromRoom) * urgency,
@@ -79,14 +85,14 @@ class _WorkerLayerState extends ConsumerState<WorkerLayer> {
         if (f.room == widget.room) {
           final blend = _lerp(scaleOf(active.fromRoom), scaleOf(active.toRoom), f.progress);
           mounts.add(f.done
-              ? _Mount(w.personaId, w.status, null, false, blend, walkOf(widget.room), w.jobId != null) // arrived — hand back to locomotion
-              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend, walkOf(widget.room), w.jobId != null));
+              ? _Mount(w.personaId, w.status, null, false, blend, walkOf(widget.room), errand) // arrived — hand back to locomotion
+              : _Mount(w.personaId, WorkerStatus.walking, f.xFrac, f.facingRight, blend, walkOf(widget.room), errand));
         }
         // f.room == null → off-view beat → not in any room
       } else {
         final visualRoom = wt?.visualRoom ?? w.currentRoom;
         if (visualRoom == widget.room) {
-          mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room), walkOf(widget.room), w.jobId != null));
+          mounts.add(_Mount(w.personaId, w.status, null, false, scaleOf(widget.room), walkOf(widget.room), errand));
         }
       }
     }
@@ -238,8 +244,9 @@ class _WorkerGame extends FlameGame {
       }
       w.roomScale = m.roomScale; // per-room camera scale (blended mid-transit)
       w.roomWalkSpeedFactor = m.roomWalkSpeedFactor; // per-room walk-speed lens
-      w.onErrand = m.onErrand; // task 28: dispatch-urgency pace on an active job
+      w.onErrand = m.onErrand; // task 28/30: dispatch-urgency pace when engaged
       w.pois = poisForRoom(room); // idle-wander points of interest (task 20c)
+      w.desks = desksForRoom(room); // workstations to type at (task 30)
       w.setTransitOverride(m.overrideXFrac, facingRight: m.facingRight);
     }
     _pushViewport();
