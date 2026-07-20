@@ -82,6 +82,7 @@ flutter:
 
   assets:
     - assets/sfx/stamp.wav
+    - assets/images/crew-register.png
     - assets/art/workshop-floor.png
     - assets/art/advisors-office.png
     - assets/art/archive.png

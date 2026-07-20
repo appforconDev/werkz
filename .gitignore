@@ -21,3 +21,4 @@ assets-pipeline/sprites/parts-hires/*/_phase-*.png
 # Clipboard generation attempts are bulky (task 19l); ref.png + chosen.png are the
 # reproducible inputs the cut pipeline uses — keep those, drop the raw candidates.
 assets-pipeline/sprites/clipboard-candidates/*/attempt*.png
+assets-pipeline/sprites/crew-front/

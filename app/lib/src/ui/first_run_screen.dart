@@ -53,6 +53,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                         'the floor is calm — that is by design. No timers, no nagging. '
                         'The workshop only stirs when your agents actually do work.',
                     icon: Icons.factory,
+                    // Task 31 D: the crew register fills the card (a 1955 staff
+                    // photo of the three personas, front-facing) — no dead space.
+                    child: _CrewRegister(),
                   ),
                   _PracticeCard(),
                 ],
@@ -119,6 +122,28 @@ class _CardShell extends StatelessWidget {
               style: const TextStyle(fontFamily: Werkz.mono, fontSize: 13, color: Werkz.gunmetal, height: 1.5)),
           if (child != null) ...[const SizedBox(height: 16), Expanded(child: child!)],
         ],
+      ),
+    );
+  }
+}
+
+// Task 31 D: the personnel-register crew photo (front-facing Bolt / Checkwell /
+// Sparkhand), filling card 1's lower half. Contained so it never overflows.
+class _CrewRegister extends StatelessWidget {
+  const _CrewRegister();
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Werkz.gunmetal, width: 1.5),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))],
+          ),
+          child: Image.asset('assets/images/crew-register.png', fit: BoxFit.contain),
+        ),
       ),
     );
   }
