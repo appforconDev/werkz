@@ -13,6 +13,31 @@ class ConsultTurn {
   const ConsultTurn(this.role, this.text);
 }
 
+/// Fallback for part B: the Advisor is instructed (in the daemon prompt) to reply
+/// in plain text, but if any Markdown slips through we strip it here so asterisks,
+/// backticks, headers and bullet markers NEVER reach the screen. Conservative —
+/// only markup characters are touched; code identifiers (snake_case, paths) and
+/// ordinary prose survive. Applied to every Advisor reply before it becomes a turn.
+String stripMarkdown(String s) {
+  var out = s;
+  // Fenced code blocks: drop the ``` fences (keep the inner text).
+  out = out.replaceAll(RegExp(r'```[a-zA-Z0-9+-]*\r?\n?'), '');
+  // Inline code: strip backticks entirely.
+  out = out.replaceAll('`', '');
+  // Line-start ATX headers ("## X" → "X") and list bullets ("- X"/"* X"/"+ X" → "X").
+  out = out.replaceAll(RegExp(r'^\s{0,3}#{1,6}\s+', multiLine: true), '');
+  out = out.replaceAllMapped(
+      RegExp(r'^(\s*)[-*+]\s+', multiLine: true), (m) => m[1]!);
+  // Bold/italic (**x**, *x*, __x__) and strikethrough (~~x~~) → inner text.
+  out = out.replaceAllMapped(
+      RegExp(r'\*{1,3}(.+?)\*{1,3}', dotAll: true), (m) => m[1]!);
+  out = out.replaceAllMapped(RegExp(r'__(.+?)__', dotAll: true), (m) => m[1]!);
+  out = out.replaceAllMapped(RegExp(r'~~(.+?)~~', dotAll: true), (m) => m[1]!);
+  // Any stray emphasis characters left unmatched must not reach the screen.
+  out = out.replaceAll('*', '');
+  return out;
+}
+
 class ConsultationState {
   final String? sessionId;
   final List<ConsultTurn> turns;
@@ -96,7 +121,7 @@ class ConsultationController extends Notifier<ConsultationState> {
     final (reply, err) = await c.consultSend(sid, text);
     if (reply != null) {
       state = state.copyWith(
-        turns: [...state.turns, ConsultTurn(ConsultRole.advisor, reply)],
+        turns: [...state.turns, ConsultTurn(ConsultRole.advisor, stripMarkdown(reply))],
         waiting: false,
       );
     } else {

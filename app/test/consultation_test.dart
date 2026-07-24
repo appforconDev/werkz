@@ -87,6 +87,37 @@ void main() {
     expect(container.read(consultationProvider).latestPlan, 'PLAN v2', reason: 'newest advisory is dispatched');
   });
 
+  // Part B: raw Markdown must NEVER reach the screen. The daemon prompt asks for
+  // plain text; stripMarkdown is the fallback. These fail if any markup survives.
+  test('stripMarkdown removes bold/italic, backticks, headers and bullets', () {
+    expect(stripMarkdown('**TASK DISPATCH REQUIRED**'), 'TASK DISPATCH REQUIRED');
+    expect(stripMarkdown('edit `pairing.ts` now'), 'edit pairing.ts now');
+    expect(stripMarkdown('## Plan\n- step one\n* step two'), 'Plan\nstep one\nstep two');
+    expect(stripMarkdown('use *emphasis* and ~~cut~~'), 'use emphasis and cut');
+    // Code identifiers and paths survive untouched.
+    expect(stripMarkdown('call some_func in a/b/c.ts'), 'call some_func in a/b/c.ts');
+    // No markup character can leak.
+    for (final ch in ['*', '`']) {
+      expect(stripMarkdown('a ${ch}b$ch c').contains(ch), isFalse, reason: '$ch must not survive');
+    }
+  });
+
+  test('an Advisor reply with Markdown is sanitised before it becomes a turn', () async {
+    final container = await _boot();
+    DaemonClient.consultStartOverride = () async => ('sess-1', null);
+    DaemonClient.consultSendOverride = (id, msg) async =>
+        ('**PLAN**\n- edit `auth.ts`\n- add `3` tests', null);
+    final ctrl = container.read(consultationProvider.notifier);
+    await ctrl.send('plan it');
+    final s = container.read(consultationProvider);
+    final shown = s.turns.last.text; // exactly what the UI renders
+    expect(shown.contains('*'), isFalse, reason: 'no asterisks reach the UI');
+    expect(shown.contains('`'), isFalse, reason: 'no backticks reach the UI');
+    // The dispatched directive (Form 17-B) is clean too.
+    expect(s.latestPlan!.contains('*'), isFalse);
+    expect(s.latestPlan!.contains('`'), isFalse);
+  });
+
   testWidgets('the consult→dispatch bridge pre-fills Form 17-B with the plan (task 39 C)', (tester) async {
     // The bridge = showWorkOrderSheet(initialDirective: plan). Test the pre-fill
     // directly (the full Advisor screen loads room art — covered by the golden).

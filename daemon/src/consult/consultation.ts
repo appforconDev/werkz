@@ -43,6 +43,9 @@ const SYSTEM = [
   'name, current behaviour), ASK for them in one short list. Reply in a dry, deadpan,',
   'bureaucratic tone (Severance/Portal), plain and concrete. Produce a clear, actionable',
   'plan the operator can hand to a worker. Keep it focused; no preamble, no sign-off.',
+  'Reply in PLAIN TEXT ONLY — no Markdown whatsoever: no asterisks for bold or italics,',
+  'no backticks or code fences, no leading # headers, no -/* bullet markers. This reads as',
+  'a 1955 typewritten memo: use CAPITALS for headings and blank lines for structure.',
 ].join(' ');
 
 const MSG_CAP = 8 * 1024;           // one operator message
